@@ -3,20 +3,34 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/tls"
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt"
+	"github.com/gorilla/mux"
 	"github.com/theheadmen/goDipl3/models"
 	"github.com/theheadmen/goDipl3/server/dbconnector"
 	"github.com/theheadmen/goDipl3/server/serverapi"
 )
+
+func loadServerCertificate() tls.Certificate {
+	// Load your server certificate and key here
+	cert, err := tls.LoadX509KeyPair("cert.pem", "key.pem")
+	if err != nil {
+		log.Fatalf("Failed to load server certificate and key: %v", err)
+	}
+	return cert
+}
 
 func TestRegisterHandler(t *testing.T) {
 	// Initialize the database and server
@@ -39,15 +53,43 @@ func TestRegisterHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a ResponseRecorder to record the response
-	rr := httptest.NewRecorder()
+	// Create a TLS configuration with the server certificate
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{loadServerCertificate()},
+	}
 
-	// Call the handler function, passing in the ResponseRecorder and the HTTP request
-	handler := http.HandlerFunc(server.RegisterHandler)
-	handler.ServeHTTP(rr, req)
+	r := mux.NewRouter()
+	r.HandleFunc("/register", server.RegisterHandler)
+
+	// Create a new HTTPS test server with the server's handler and TLS configuration
+	ts := httptest.NewTLSServer(r)
+	ts.TLS = tlsConfig
+	defer ts.Close()
+
+	// Modify the request URL to point to the test server
+	req.URL, err = url.Parse(ts.URL + "/register")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a client that skips certificate verification for testing purposes
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // This is not secure and should not be used in production
+			},
+		},
+	}
+
+	// Send the request to the test server
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
 
 	// Check the status code of the response
-	if status := rr.Code; status != http.StatusCreated {
+	if status := resp.StatusCode; status != http.StatusCreated {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusCreated)
 	}
 
@@ -97,20 +139,48 @@ func TestLoginHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a ResponseRecorder to record the response
-	rr := httptest.NewRecorder()
+	// Create a TLS configuration with the server certificate
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{loadServerCertificate()},
+	}
 
-	// Call the handler function, passing in the ResponseRecorder and the HTTP request
-	handler := http.HandlerFunc(server.LoginHandler)
-	handler.ServeHTTP(rr, req)
+	r := mux.NewRouter()
+	r.HandleFunc("/login", server.LoginHandler)
+
+	// Create a new HTTPS test server with the server's handler and TLS configuration
+	ts := httptest.NewTLSServer(r)
+	ts.TLS = tlsConfig
+	defer ts.Close()
+
+	// Modify the request URL to point to the test server
+	req.URL, err = url.Parse(ts.URL + "/login")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a client that skips certificate verification for testing purposes
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // This is not secure and should not be used in production
+			},
+		},
+	}
+
+	// Send the request to the test server
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
 
 	// Check the status code of the response
-	if status := rr.Code; status != http.StatusOK {
+	if status := resp.StatusCode; status != http.StatusOK {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
 	// Check that the JWT token is set correctly
-	cookies := rr.Result().Cookies()
+	cookies := resp.Cookies()
 	var tokenCookie *http.Cookie
 	for _, cookie := range cookies {
 		if cookie.Name == "token" {
@@ -199,6 +269,29 @@ func TestStoreHandler(t *testing.T) {
 		Expires: expirationTime,
 	}
 
+	// Create a TLS configuration with the server certificate
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{loadServerCertificate()},
+	}
+
+	r := mux.NewRouter()
+	r.HandleFunc("/store", server.StoreHandler)
+	r.HandleFunc("/retrieve", server.RetrieveHandler)
+
+	// Create a new HTTPS test server with the server's handler and TLS configuration
+	ts := httptest.NewTLSServer(r)
+	ts.TLS = tlsConfig
+	defer ts.Close()
+
+	// Create a client that skips certificate verification for testing purposes
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // This is not secure and should not be used in production
+			},
+		},
+	}
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a new HTTP request with a JSON payload
@@ -210,22 +303,34 @@ func TestStoreHandler(t *testing.T) {
 
 			req.AddCookie(cookie)
 
-			// Create a ResponseRecorder to record the response
-			rr := httptest.NewRecorder()
+			// Modify the request URL to point to the test server
+			req.URL, err = url.Parse(ts.URL + "/store?type=" + tc.dataType)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-			// Call the handler function, passing in the ResponseRecorder and the HTTP request
-			handler := http.HandlerFunc(server.StoreHandler)
-			handler.ServeHTTP(rr, req)
+			// Send the request to the test server
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
 
 			// Check the status code of the response
-			if status := rr.Code; status != http.StatusCreated {
+			if status := resp.StatusCode; status != http.StatusCreated {
 				t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusCreated)
 			}
 
+			respBody, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			respBodyStr := string(respBody)
+
 			// Check the response body
 			expectedResponse := "Data stored successfully"
-			if rr.Body.String() != expectedResponse {
-				t.Errorf("handler returned unexpected body: got %v want %v", rr.Body.String(), expectedResponse)
+			if respBodyStr != expectedResponse {
+				t.Errorf("handler returned unexpected body: got %v want %v", respBodyStr, expectedResponse)
 			}
 
 			// Retrieve the data
@@ -234,18 +339,27 @@ func TestStoreHandler(t *testing.T) {
 				t.Fatal(err)
 			}
 			retrieveReq.AddCookie(cookie)
-			retrieveRR := httptest.NewRecorder()
-			rethandler := http.HandlerFunc(server.RetrieveHandler)
-			rethandler.ServeHTTP(retrieveRR, retrieveReq)
+			// Modify the request URL to point to the test server
+			retrieveReq.URL, err = url.Parse(ts.URL + "/retrieve?type=" + tc.dataType)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Send the request to the test server
+			retrieveResp, err := client.Do(retrieveReq)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer retrieveResp.Body.Close()
 
 			// Check the retrieve response status code
-			if retrieveStatus := retrieveRR.Code; retrieveStatus != http.StatusOK {
+			if retrieveStatus := retrieveResp.StatusCode; retrieveStatus != http.StatusOK {
 				t.Errorf("retrieve handler returned wrong status code: got %v want %v", retrieveStatus, http.StatusOK)
 			}
 
 			// Check the response body for the retrieved data
 			var retrievedData []map[string]interface{}
-			err = json.NewDecoder(retrieveRR.Body).Decode(&retrievedData)
+			err = json.NewDecoder(retrieveResp.Body).Decode(&retrievedData)
 			if err != nil {
 				t.Errorf("failed to decode retrieve response body: %v", err)
 			}

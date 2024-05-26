@@ -32,5 +32,12 @@ func main() {
 
 	log.Println("Server is started")
 
-	http.ListenAndServe(":8080", r)
+	serverReal := &http.Server{
+		Addr:    ":8080",
+		Handler: r,
+	}
+
+	if err := serverReal.ListenAndServeTLS("cert.pem", "key.pem"); err != nil && err != http.ErrServerClosed {
+		log.Println("Server is down")
+	}
 }

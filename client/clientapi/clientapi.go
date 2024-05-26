@@ -3,6 +3,11 @@ package clientapi
 import (
 	"bufio"
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -97,7 +102,14 @@ var registerCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		resp, err := http.Post("http://localhost:8080/register", "application/json", bytes.NewBuffer(userJson))
+		// Создаем новый транспорт, который будет использовать TLS
+		// Используйте InsecureSkipVerify: false для рабочей среды
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{Transport: tr}
+
+		resp, err := client.Post("https://localhost:8080/register", "application/json", bytes.NewBuffer(userJson))
 		if err != nil {
 			fmt.Println("Error sending registration request:", err)
 			os.Exit(1)
@@ -133,7 +145,14 @@ var loginCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		resp, err := http.Post("http://localhost:8080/login", "application/json", bytes.NewBuffer(userJson))
+		// Создаем новый транспорт, который будет использовать TLS
+		// Используйте InsecureSkipVerify: false для рабочей среды
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{Transport: tr}
+
+		resp, err := client.Post("https://localhost:8080/login", "application/json", bytes.NewBuffer(userJson))
 		if err != nil {
 			fmt.Println("Error sending login request:", err)
 			os.Exit(1)
@@ -154,35 +173,60 @@ var loginCmd = &cobra.Command{
 }
 
 var storeCmd = &cobra.Command{
-	Use:   "store TYPE DATA flags",
+	Use:   "store TYPE DATA KEY flags",
 	Short: "Store user data",
-	Args:  cobra.ExactArgs(2),
+	Args:  cobra.ExactArgs(3),
 	Run: func(cmd *cobra.Command, args []string) {
 		dataType := args[0]
 		data := args[1]
+		key := []byte(args[2])
 
 		meta, _ := cmd.Flags().GetString("meta")
 		expiry, _ := cmd.Flags().GetString("expiry")
 		cvv, _ := cmd.Flags().GetString("cvv")
 
+		encData, err := Encrypt(key, data)
+		if err != nil {
+			fmt.Println("Error encrypting data:", err)
+			os.Exit(1)
+		}
+
+		encMeta, err := Encrypt(key, meta)
+		if err != nil {
+			fmt.Println("Error encrypting meta:", err)
+			os.Exit(1)
+		}
+
 		var dataToStore interface{}
 		switch dataType {
 		case "text":
 			dataToStore = models.TextData{
-				Data: data,
-				Meta: meta,
+				Data: encData,
+				Meta: encMeta,
 			}
 		case "binary":
 			dataToStore = models.BinaryData{
 				Data: []byte(data),
-				Meta: meta,
+				Meta: encMeta,
 			}
 		case "bankcard":
+			encExpiry, err := Encrypt(key, expiry)
+			if err != nil {
+				fmt.Println("Error encrypting expiry:", err)
+				os.Exit(1)
+			}
+
+			encCVV, err := Encrypt(key, cvv)
+			if err != nil {
+				fmt.Println("Error encrypting cvv:", err)
+				os.Exit(1)
+			}
+
 			dataToStore = models.BankCard{
-				Number: data,
-				Meta:   meta,
-				Expiry: expiry,
-				CVV:    cvv,
+				Number: encData,
+				Meta:   encMeta,
+				Expiry: encExpiry,
+				CVV:    encCVV,
 			}
 		default:
 			fmt.Println("Unsupported data type")
@@ -196,7 +240,7 @@ var storeCmd = &cobra.Command{
 		}
 
 		// Создаем URL с параметром типа данных
-		baseURL, err := url.Parse("http://localhost:8080/store")
+		baseURL, err := url.Parse("https://localhost:8080/store")
 		if err != nil {
 			fmt.Println("Error parsing URL:", err)
 			os.Exit(1)
@@ -206,7 +250,13 @@ var storeCmd = &cobra.Command{
 		params.Add("type", dataType)
 		baseURL.RawQuery = params.Encode()
 
-		client := &http.Client{}
+		// Создаем новый транспорт, который будет использовать TLS
+		// Используйте InsecureSkipVerify: false для рабочей среды
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{Transport: tr}
+
 		req, err := http.NewRequest("POST", baseURL.String(), bytes.NewBuffer(dataJson))
 		if err != nil {
 			fmt.Println("Error creating request:", err)
@@ -237,14 +287,15 @@ var storeCmd = &cobra.Command{
 }
 
 var getCmd = &cobra.Command{
-	Use:   "get TYPE",
+	Use:   "get TYPE KEY",
 	Short: "Get user data",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		dataType := args[0]
+		key := []byte(args[1])
 
 		// Создаем URL с параметром типа данных
-		baseURL, err := url.Parse("http://localhost:8080/retrieve")
+		baseURL, err := url.Parse("https://localhost:8080/retrieve")
 		if err != nil {
 			fmt.Println("Error parsing URL:", err)
 			os.Exit(1)
@@ -254,7 +305,12 @@ var getCmd = &cobra.Command{
 		params.Add("type", dataType)
 		baseURL.RawQuery = params.Encode()
 
-		client := &http.Client{}
+		// Создаем новый транспорт, который будет использовать TLS
+		// Используйте InsecureSkipVerify: false для рабочей среды
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{Transport: tr}
 		req, err := http.NewRequest("GET", baseURL.String(), nil)
 		if err != nil {
 			fmt.Println("Error creating request:", err)
@@ -292,6 +348,21 @@ var getCmd = &cobra.Command{
 				fmt.Println("Error unmarshalling TextData:", err)
 				os.Exit(1)
 			}
+			for i := range textData {
+				decrData, err := Decrypt(key, textData[i].Data)
+				if err != nil {
+					fmt.Println("Error decrypt TextData.data:", err)
+					os.Exit(1)
+				}
+
+				decrMeta, err := Decrypt(key, textData[i].Meta)
+				if err != nil {
+					fmt.Println("Error decrypt TextData.meta:", err)
+					os.Exit(1)
+				}
+				textData[i].Data = decrData
+				textData[i].Meta = decrMeta
+			}
 			fmt.Printf("TextData: %+v\n", textData)
 		case "binary":
 			var binaryData []models.BinaryData
@@ -308,6 +379,35 @@ var getCmd = &cobra.Command{
 				fmt.Println("Error unmarshalling BankCard:", err)
 				os.Exit(1)
 			}
+			for i := range bankCard {
+				decrNumber, err := Decrypt(key, bankCard[i].Number)
+				if err != nil {
+					fmt.Println("Error decrypt bankCard.Number:", err)
+					os.Exit(1)
+				}
+
+				decrExpiry, err := Decrypt(key, bankCard[i].Expiry)
+				if err != nil {
+					fmt.Println("Error decrypt bankCard.Expiry:", err)
+					os.Exit(1)
+				}
+
+				decrCVV, err := Decrypt(key, bankCard[i].CVV)
+				if err != nil {
+					fmt.Println("Error decrypt bankCard.CVV:", err)
+					os.Exit(1)
+				}
+
+				decrMeta, err := Decrypt(key, bankCard[i].Meta)
+				if err != nil {
+					fmt.Println("Error decrypt bankCard.meta:", err)
+					os.Exit(1)
+				}
+				bankCard[i].Number = decrNumber
+				bankCard[i].Expiry = decrExpiry
+				bankCard[i].CVV = decrCVV
+				bankCard[i].Meta = decrMeta
+			}
 			fmt.Printf("BankCard: %+v\n", bankCard)
 		default:
 			fmt.Println("Unsupported data type")
@@ -322,6 +422,74 @@ var versionCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Printf("GophKeeper CLI version %s, built on %s\n", version, buildDate)
 	},
+}
+
+// Encrypt encrypts a string using a key of any length
+func Encrypt(key []byte, text string) (string, error) {
+	plaintext := []byte(text)
+
+	// Pad key to block size
+	key = padKeyToBlockSize(key, aes.BlockSize)
+
+	// Create a new AES cipher using the key
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	// Create a new Counter Mode block cipher
+	iv := make([]byte, aes.BlockSize)
+	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
+		return "", err
+	}
+
+	stream := cipher.NewCTR(block, iv)
+	ciphertext := make([]byte, len(plaintext))
+	stream.XORKeyStream(ciphertext, plaintext)
+
+	// Prepend the IV to the ciphertext
+	ciphertextWithIV := append(iv, ciphertext...)
+
+	return hex.EncodeToString(ciphertextWithIV), nil
+}
+
+// Decrypt decrypts a string using a key of any length
+func Decrypt(key []byte, cryptoText string) (string, error) {
+	ciphertextWithIV, err := hex.DecodeString(cryptoText)
+	if err != nil {
+		return "", err
+	}
+
+	// Pad key to block size
+	key = padKeyToBlockSize(key, aes.BlockSize)
+
+	// Create a new AES cipher using the key
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	// Extract the IV from the ciphertext
+	if len(ciphertextWithIV) < aes.BlockSize {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+	iv := ciphertextWithIV[:aes.BlockSize]
+	ciphertext := ciphertextWithIV[aes.BlockSize:]
+
+	// Create a new Counter Mode block cipher
+	stream := cipher.NewCTR(block, iv)
+	plaintext := make([]byte, len(ciphertext))
+	stream.XORKeyStream(plaintext, ciphertext)
+
+	return string(plaintext), nil
+}
+
+// padKeyToBlockSize pads the key to the block size if it's shorter
+func padKeyToBlockSize(key []byte, blockSize int) []byte {
+	for len(key) < blockSize {
+		key = append(key, 0)
+	}
+	return key[:blockSize]
 }
 
 func init() {
