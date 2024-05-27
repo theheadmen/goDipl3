@@ -2,6 +2,7 @@ package dbconnector
 
 import (
 	"database/sql"
+	"errors"
 	"log"
 	"time"
 
@@ -193,4 +194,55 @@ func RetrieveBankCards(userID int, db *sql.DB) ([]models.BankCard, error) {
 	}
 
 	return bankCardsList, nil
+}
+
+// deleteTextData deletes text data for the given user.
+func DeleteTextData(userID int, dataID string, db *sql.DB) error {
+	// Check if the data exists
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM text_data WHERE user_id = ? AND id = ?", userID, dataID).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return errors.New("data not found")
+	}
+
+	// Delete the data
+	_, err = db.Exec("DELETE FROM text_data WHERE user_id = ? AND id = ?", userID, dataID)
+	return err
+}
+
+// deleteBinaryData deletes binary data for the given user.
+func DeleteBinaryData(userID int, dataID string, db *sql.DB) error {
+	// Check if the data exists
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM binary_data WHERE user_id = ? AND id = ?", userID, dataID).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return errors.New("data not found")
+	}
+
+	// Delete the data
+	_, err = db.Exec("DELETE FROM binary_data WHERE user_id = ? AND id = ?", userID, dataID)
+	return err
+}
+
+// deleteBankCard deletes bank card data for the given user.
+func DeleteBankCard(userID int, dataID string, db *sql.DB) error {
+	// Check if the data exists
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM bank_cards WHERE user_id = ? AND id = ?", userID, dataID).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return errors.New("data not found")
+	}
+
+	// Delete the data
+	_, err = db.Exec("DELETE FROM bank_cards WHERE user_id = ? AND id = ?", userID, dataID)
+	return err
 }

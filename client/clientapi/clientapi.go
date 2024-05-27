@@ -416,6 +416,60 @@ var getCmd = &cobra.Command{
 	},
 }
 
+var deleteCmd = &cobra.Command{
+	Use:   "delete TYPE ID",
+	Short: "Delete user data",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		dataType := args[0]
+		dataID := args[1]
+
+		// Создаем URL с параметром типа данных
+		baseURL, err := url.Parse("https://localhost:8080/delete")
+		if err != nil {
+			fmt.Println("Error parsing URL:", err)
+			os.Exit(1)
+		}
+
+		params := url.Values{}
+		params.Add("type", dataType)
+		params.Add("id", dataID)
+		baseURL.RawQuery = params.Encode()
+
+		// Создаем новый транспорт, который будет использовать TLS
+		// Используйте InsecureSkipVerify: false для рабочей среды
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{Transport: tr}
+
+		req, err := http.NewRequest("POST", baseURL.String(), nil)
+		if err != nil {
+			fmt.Println("Error creating request:", err)
+			os.Exit(1)
+		}
+
+		// Установка cookie в заголовки запроса
+		for _, cookie := range authCookies {
+			req.AddCookie(cookie)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println("Error sending delete request:", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			fmt.Println("Delete failed with status:", resp.Status)
+			os.Exit(1)
+		}
+
+		fmt.Println("Data deleted successfully.")
+	},
+}
+
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of GophKeeper CLI",
@@ -507,4 +561,5 @@ func init() {
 	RootCmd.AddCommand(storeCmd)
 	RootCmd.AddCommand(getCmd)
 	RootCmd.AddCommand(versionCmd)
+	RootCmd.AddCommand(deleteCmd)
 }

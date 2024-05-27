@@ -67,7 +67,7 @@ func TestStoreText(t *testing.T) {
 	meta := "test meta"
 
 	// Execute the store command.
-	cmd := exec.Command("go", "run", "main.go", "store", dataType, data, "--meta", meta)
+	cmd := exec.Command("go", "run", "main.go", "store", dataType, data, "somekey", "--meta", meta)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -88,7 +88,7 @@ func TestStoreBinary(t *testing.T) {
 	meta := "test meta"
 
 	// Execute the store command for binary data.
-	cmd := exec.Command("go", "run", "main.go", "store", dataType, data, "--meta", meta)
+	cmd := exec.Command("go", "run", "main.go", "store", dataType, data, "somekey", "--meta", meta)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -111,7 +111,7 @@ func TestStoreBankCard(t *testing.T) {
 	cvv := "123"      // Example CVV code
 
 	// Execute the store command for bank card data.
-	cmd := exec.Command("go", "run", "main.go", "store", dataType, data, "--meta", meta, "--expiry", expiry, "--cvv", cvv)
+	cmd := exec.Command("go", "run", "main.go", "store", dataType, data, "somekey", "--meta", meta, "--expiry", expiry, "--cvv", cvv)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -130,7 +130,7 @@ func TestGetText(t *testing.T) {
 	dataType := "text"
 
 	// Execute the get command.
-	cmd := exec.Command("go", "run", "main.go", "get", dataType)
+	cmd := exec.Command("go", "run", "main.go", "get", dataType, "somekey")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -149,7 +149,7 @@ func TestGetBinary(t *testing.T) {
 	dataType := "binary"
 
 	// Execute the get command.
-	cmd := exec.Command("go", "run", "main.go", "get", dataType)
+	cmd := exec.Command("go", "run", "main.go", "get", dataType, "somekey")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -168,7 +168,7 @@ func TestGetBankcard(t *testing.T) {
 	dataType := "bankcard"
 
 	// Execute the get command.
-	cmd := exec.Command("go", "run", "main.go", "get", dataType)
+	cmd := exec.Command("go", "run", "main.go", "get", dataType, "somekey")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -177,6 +177,63 @@ func TestGetBankcard(t *testing.T) {
 
 	// Check the output.
 	expectedOutput := "BankCard: [{ID:1 UserID:1 Number:1234567812345678 Expiry:12/24 CVV:123 Meta:test meta "
+	if !strings.Contains(out.String(), expectedOutput) {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+}
+
+// TestDeleteText tests the text data delete process.
+func TestDeleteText(t *testing.T) {
+	dataType := "text"
+
+	// Execute the get command.
+	cmd := exec.Command("go", "run", "main.go", "delete", dataType, "1")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("delete command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput := "Data deleted successfully."
+	if !strings.Contains(out.String(), expectedOutput) {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+}
+
+// TestDeleteBinary tests the binary data delete process.
+func TestDeleteBinary(t *testing.T) {
+	dataType := "binary"
+
+	// Execute the get command.
+	cmd := exec.Command("go", "run", "main.go", "delete", dataType, "1")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("delete command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput := "Data deleted successfully."
+	if !strings.Contains(out.String(), expectedOutput) {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+}
+
+// TestDeleteBankcard tests the bankcard data delete process.
+func TestDeleteBankcard(t *testing.T) {
+	dataType := "bankcard"
+
+	// Execute the get command.
+	cmd := exec.Command("go", "run", "main.go", "delete", dataType, "1")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("delete command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput := "Data deleted successfully."
 	if !strings.Contains(out.String(), expectedOutput) {
 		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
 	}

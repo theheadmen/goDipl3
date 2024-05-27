@@ -269,3 +269,46 @@ func (s *Server) RetrieveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+// DeleteHandler handles the deletion of user data.
+func (s *Server) DeleteHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Delete query")
+
+	// Get the data type.
+	dataType := r.URL.Query().Get("type")
+
+	// Get the user ID from the JWT token.
+	userID, err := getUserIDFromToken(r)
+	if err != nil {
+		log.Println("getUserIDFromToken error: ", err.Error())
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Get the data ID from the URL.
+	dataID := r.URL.Query().Get("id")
+
+	log.Println("delete", dataType, "for", userID)
+
+	// Delete the data based on the type.
+	switch dataType {
+	case "text":
+		err = dbconnector.DeleteTextData(userID, dataID, s.db)
+	case "binary":
+		err = dbconnector.DeleteBinaryData(userID, dataID, s.db)
+	case "bankcard":
+		err = dbconnector.DeleteBankCard(userID, dataID, s.db)
+	default:
+		log.Println("invalid data type: ", dataType)
+		http.Error(w, "Invalid data type", http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Data deleted successfully")
+}

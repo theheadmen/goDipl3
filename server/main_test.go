@@ -399,3 +399,168 @@ func TestStoreHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteHandler(t *testing.T) {
+	// Initialize the database and server
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+	dbconnector.InitDB(db)
+	server := serverapi.NewServer(db)
+
+	// Create a test user
+	user := models.User{
+		Username: "testuser",
+		Password: "testpassword",
+	}
+	hasher := md5.New()
+	hasher.Write([]byte(user.Password))
+	hashedPassword := hex.EncodeToString(hasher.Sum(nil))
+	_, err = db.Exec("INSERT INTO users (username, password) VALUES (?, ?)", user.Username, hashedPassword)
+	if err != nil {
+		t.Fatalf("Failed to insert test user: %v", err)
+	}
+
+	textData := models.TextData{
+		UserID:    user.ID,
+		Data:      "data",
+		Meta:      "meta",
+		CreatedAt: time.Now(),
+	}
+	_, err = db.Exec("INSERT INTO text_data (user_id, data, meta, created_at) VALUES (?, ?, ?, ?)", textData.UserID, textData.Data, textData.Meta, textData.CreatedAt)
+	if err != nil {
+		t.Fatalf("Failed to insert test textdata: %v", err)
+	}
+
+	binaryData := models.BinaryData{
+		UserID:    user.ID,
+		Data:      []byte("123456789"),
+		Meta:      "meta",
+		CreatedAt: time.Now(),
+	}
+
+	_, err = db.Exec("INSERT INTO binary_data (user_id, data, meta, created_at) VALUES (?, ?, ?, ?)", binaryData.UserID, binaryData.Data, binaryData.Meta, binaryData.CreatedAt)
+	if err != nil {
+		t.Fatalf("Failed to insert test binarydata: %v", err)
+	}
+
+	bankCard := models.BankCard{
+		UserID:    user.ID,
+		Number:    "123456",
+		Expiry:    "12/24",
+		CVV:       "888",
+		Meta:      "meta",
+		CreatedAt: time.Now(),
+	}
+
+	_, err = db.Exec("INSERT INTO bank_cards (user_id, number, expiry, cvv, meta, created_at) VALUES (?, ?, ?, ?, ?, ?)", bankCard.UserID, bankCard.Number, bankCard.Expiry, bankCard.CVV, bankCard.Meta, bankCard.CreatedAt)
+	if err != nil {
+		t.Fatalf("Failed to insert test bankdata: %v", err)
+	}
+
+	// Test cases for different data types
+	testCases := []struct {
+		name     string
+		dataType string
+		dataID   string
+		code     int
+	}{
+		{
+			name:     "Delete text data",
+			dataType: "text",
+			dataID:   "1",
+			code:     http.StatusOK,
+		},
+		{
+			name:     "Delete text data with error",
+			dataType: "text",
+			dataID:   "1",
+			code:     http.StatusInternalServerError,
+		},
+		{
+			name:     "Delete binary data",
+			dataType: "binary",
+			dataID:   "1",
+			code:     http.StatusOK,
+		},
+		{
+			name:     "Delete bank card data",
+			dataType: "bankcard",
+			dataID:   "1",
+			code:     http.StatusOK,
+		},
+	}
+
+	// Set the JWT token in the request header
+	expirationTime := time.Now().Add(1 * time.Hour)
+	claims := &serverapi.Claims{
+		UserID: user.ID,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expirationTime.Unix(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(serverapi.JwtKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := &http.Cookie{
+		Name:    "token",
+		Value:   tokenString,
+		Expires: expirationTime,
+	}
+
+	// Create a TLS configuration with the server certificate
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{loadServerCertificate()},
+	}
+
+	r := mux.NewRouter()
+	r.HandleFunc("/delete", server.DeleteHandler)
+
+	// Create a new HTTPS test server with the server's handler and TLS configuration
+	ts := httptest.NewTLSServer(r)
+	ts.TLS = tlsConfig
+	defer ts.Close()
+
+	// Create a client that skips certificate verification for testing purposes
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // This is not secure and should not be used in production
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create a new HTTP request
+			req, err := http.NewRequest("POST", "/delete?type="+tc.dataType+"&id="+tc.dataID, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			req.AddCookie(cookie)
+
+			// Modify the request URL to point to the test server
+			req.URL, err = url.Parse(ts.URL + "/delete?type=" + tc.dataType + "&id=" + tc.dataID)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Send the request to the test server
+			resp, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+
+			// Check the status code of the response
+			if status := resp.StatusCode; status != tc.code {
+				t.Errorf("handler returned wrong status code: got %v want %v", status, tc.code)
+			}
+		})
+	}
+}
