@@ -30,6 +30,7 @@ func main() {
 	r.HandleFunc("/store", server.StoreHandler)
 	r.HandleFunc("/retrieve", server.RetrieveHandler)
 	r.HandleFunc("/delete", server.DeleteHandler)
+	r.HandleFunc("/update", server.UpdateHandler)
 
 	log.Println("Server is started")
 

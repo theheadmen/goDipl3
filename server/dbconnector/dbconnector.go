@@ -246,3 +246,75 @@ func DeleteBankCard(userID int, dataID string, db *sql.DB) error {
 	_, err = db.Exec("DELETE FROM bank_cards WHERE user_id = ? AND id = ?", userID, dataID)
 	return err
 }
+
+// updateTextData updates text data for the given user.
+func UpdateTextData(userID int, dataID string, data map[string]interface{}, db *sql.DB) error {
+	// Check if the data exists.
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM text_data WHERE id = ? AND user_id = ?)", dataID, userID).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("data not found")
+	}
+
+	textData := models.TextData{
+		UserID: userID,
+		Data:   data["data"].(string),
+		Meta:   data["meta"].(string),
+		//UpdatedAt: time.Now(),
+	}
+	log.Println("update text", textData)
+
+	_, err = db.Exec("UPDATE text_data SET data = ?, meta = ? WHERE id = ? AND user_id = ?", textData.Data, textData.Meta, dataID, userID)
+	return err
+}
+
+// updateBinaryData updates binary data for the given user.
+func UpdateBinaryData(userID int, dataID string, data map[string]interface{}, db *sql.DB) error {
+	// Check if the data exists.
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM binary_data WHERE id = ? AND user_id = ?)", dataID, userID).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("data not found")
+	}
+
+	binaryData := models.BinaryData{
+		UserID: userID,
+		Data:   []byte(data["data"].(string)),
+		Meta:   data["meta"].(string),
+		//UpdatedAt: time.Now(),
+	}
+
+	_, err = db.Exec("UPDATE binary_data SET data = ?, meta = ? WHERE id = ? AND user_id = ?", binaryData.Data, binaryData.Meta, dataID, userID)
+	return err
+}
+
+// updateBankCard updates bank card data for the given user.
+func UpdateBankCard(userID int, dataID string, data map[string]interface{}, db *sql.DB) error {
+	// Check if the data exists.
+	var exists bool
+	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM bank_cards WHERE id = ? AND user_id = ?)", dataID, userID).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("data not found")
+	}
+
+	bankCard := models.BankCard{
+		UserID: userID,
+		Number: data["number"].(string),
+		Expiry: data["expiry"].(string),
+		CVV:    data["cvv"].(string),
+		Meta:   data["meta"].(string),
+		//UpdatedAt: time.Now(),
+	}
+
+	_, err = db.Exec("UPDATE bank_cards SET number = ?, expiry = ?, cvv = ?, meta = ? WHERE id = ? AND user_id = ?", bankCard.Number, bankCard.Expiry, bankCard.CVV, bankCard.Meta, dataID, userID)
+	return err
+}

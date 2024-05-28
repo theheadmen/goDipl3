@@ -286,6 +286,122 @@ var storeCmd = &cobra.Command{
 	},
 }
 
+var updateCmd = &cobra.Command{
+	Use:   "update TYPE DATAID DATA KEY flags",
+	Short: "Update user data",
+	Args:  cobra.ExactArgs(4),
+	Run: func(cmd *cobra.Command, args []string) {
+		dataType := args[0]
+		dataID := args[1]
+		data := args[2]
+		key := []byte(args[3])
+
+		meta, _ := cmd.Flags().GetString("meta")
+		expiry, _ := cmd.Flags().GetString("expiry")
+		cvv, _ := cmd.Flags().GetString("cvv")
+
+		encData, err := Encrypt(key, data)
+		if err != nil {
+			fmt.Println("Error encrypting data:", err)
+			os.Exit(1)
+		}
+
+		encMeta, err := Encrypt(key, meta)
+		if err != nil {
+			fmt.Println("Error encrypting meta:", err)
+			os.Exit(1)
+		}
+
+		var dataToStore interface{}
+		switch dataType {
+		case "text":
+			dataToStore = models.TextData{
+				Data: encData,
+				Meta: encMeta,
+			}
+		case "binary":
+			dataToStore = models.BinaryData{
+				Data: []byte(data),
+				Meta: encMeta,
+			}
+		case "bankcard":
+			encExpiry, err := Encrypt(key, expiry)
+			if err != nil {
+				fmt.Println("Error encrypting expiry:", err)
+				os.Exit(1)
+			}
+
+			encCVV, err := Encrypt(key, cvv)
+			if err != nil {
+				fmt.Println("Error encrypting cvv:", err)
+				os.Exit(1)
+			}
+
+			dataToStore = models.BankCard{
+				Number: encData,
+				Meta:   encMeta,
+				Expiry: encExpiry,
+				CVV:    encCVV,
+			}
+		default:
+			fmt.Println("Unsupported data type")
+			os.Exit(1)
+		}
+
+		dataJson, err := json.Marshal(dataToStore)
+		if err != nil {
+			fmt.Println("Error marshalling data:", err)
+			os.Exit(1)
+		}
+
+		// Создаем URL с параметром типа данных
+		baseURL, err := url.Parse("https://localhost:8080/update")
+		if err != nil {
+			fmt.Println("Error parsing URL:", err)
+			os.Exit(1)
+		}
+
+		params := url.Values{}
+		params.Add("type", dataType)
+		params.Add("data_id", dataID)
+		baseURL.RawQuery = params.Encode()
+
+		// Создаем новый транспорт, который будет использовать TLS
+		// Используйте InsecureSkipVerify: false для рабочей среды
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{Transport: tr}
+
+		req, err := http.NewRequest("POST", baseURL.String(), bytes.NewBuffer(dataJson))
+		if err != nil {
+			fmt.Println("Error creating request:", err)
+			os.Exit(1)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+
+		// Установка cookie в заголовки запроса
+		for _, cookie := range authCookies {
+			req.AddCookie(cookie)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println("Error sending update request:", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			fmt.Println("Update failed with status:", resp.Status)
+			os.Exit(1)
+		}
+
+		fmt.Println("Data updated successfully.")
+	},
+}
+
 var getCmd = &cobra.Command{
 	Use:   "get TYPE KEY",
 	Short: "Get user data",
@@ -562,4 +678,9 @@ func init() {
 	RootCmd.AddCommand(getCmd)
 	RootCmd.AddCommand(versionCmd)
 	RootCmd.AddCommand(deleteCmd)
+	updateCmd.Flags().StringP("meta", "m", "", "Metadata for the data")
+	updateCmd.Flags().StringP("expiry", "e", "", "Expiry date for the card")
+	updateCmd.Flags().StringP("cvv", "c", "", "CVV code for the card")
+	RootCmd.AddCommand(updateCmd)
+
 }

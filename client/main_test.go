@@ -182,6 +182,110 @@ func TestGetBankcard(t *testing.T) {
 	}
 }
 
+// TestUpdateText tests the text data update process.
+func TestUpdateText(t *testing.T) {
+	dataType := "text"
+	data := "upd data"
+	meta := "upd meta"
+
+	// Execute the store command.
+	cmd := exec.Command("go", "run", "main.go", "update", dataType, "1", data, "somekey", "--meta", meta)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("update command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput := "Data updated successfully.\n"
+	if out.String() != expectedOutput {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+
+	// Execute the get command.
+	cmd = exec.Command("go", "run", "main.go", "get", dataType, "somekey")
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("get command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput = "TextData: [{ID:1 UserID:1 Data:upd data Meta:upd meta"
+	if !strings.Contains(out.String(), expectedOutput) {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+}
+
+// TestUpdateBinary tests the data update process for binary data.
+func TestUpdateBinary(t *testing.T) {
+	dataType := "binary"
+	data := "ASDasd1234"
+	meta := "upd test meta"
+
+	// Execute the update command for binary data.
+	cmd := exec.Command("go", "run", "main.go", "update", dataType, "1", data, "somekey", "--meta", meta)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("update command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput := "Data updated successfully.\n"
+	if out.String() != expectedOutput {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+
+	// Execute the get command.
+	cmd = exec.Command("go", "run", "main.go", "get", dataType, "somekey")
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("get command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput = "BinaryData: [{ID:1 UserID:1 Data:[81 86 78 69 89 88 78 107 77 84 73 122 78 65 61 61]"
+	if !strings.Contains(out.String(), expectedOutput) {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+}
+
+// TestUpdateBankCard tests the data update process for bank card data.
+func TestUpdateBankCard(t *testing.T) {
+	dataType := "bankcard"
+	data := "1234567812345678" // Example bank card number
+	meta := "upd test meta"
+	expiry := "10/10" // Example expiry date
+	cvv := "321"      // Example CVV code
+
+	// Execute the update command for bank card data.
+	cmd := exec.Command("go", "run", "main.go", "update", dataType, "1", data, "somekey", "--meta", meta, "--expiry", expiry, "--cvv", cvv)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("store command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput := "Data updated successfully.\n"
+	if out.String() != expectedOutput {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+
+	// Execute the get command.
+	cmd = exec.Command("go", "run", "main.go", "get", dataType, "somekey")
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("get command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput = "BankCard: [{ID:1 UserID:1 Number:1234567812345678 Expiry:10/10 CVV:321 Meta:upd test meta "
+	if !strings.Contains(out.String(), expectedOutput) {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+}
+
 // TestDeleteText tests the text data delete process.
 func TestDeleteText(t *testing.T) {
 	dataType := "text"

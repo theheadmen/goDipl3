@@ -312,3 +312,54 @@ func (s *Server) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "Data deleted successfully")
 }
+
+// UpdateHandler handles the update of user data.
+func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Update query")
+	// Parse the request body.
+	var data map[string]interface{}
+	err := json.NewDecoder(r.Body).Decode(&data)
+	if err != nil {
+		log.Println("can't decode body for update")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Get the data type.
+	dataType := r.URL.Query().Get("type")
+
+	// Get the user ID from the JWT token.
+	userID, err := getUserIDFromToken(r)
+	if err != nil {
+		log.Println("getUserIDFromToken error: ", err.Error())
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Get the data ID from the URL.
+	dataID := r.URL.Query().Get("data_id")
+
+	log.Println("update", dataType, "for", userID)
+
+	// Update the data based on the type.
+	switch dataType {
+	case "text":
+		err = dbconnector.UpdateTextData(userID, dataID, data, s.db)
+	case "binary":
+		err = dbconnector.UpdateBinaryData(userID, dataID, data, s.db)
+	case "bankcard":
+		err = dbconnector.UpdateBankCard(userID, dataID, data, s.db)
+	default:
+		log.Println("invalid data type: ", dataType)
+		http.Error(w, "Invalid data type", http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Data updated successfully")
+}
