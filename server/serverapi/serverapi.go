@@ -6,8 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -362,4 +366,212 @@ func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "Data updated successfully")
+}
+
+// StoreFileHandler handles the storage of user files.
+func (s *Server) StoreFileHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Store file query")
+
+	// Get the user ID from the JWT token.
+	userID, err := getUserIDFromToken(r)
+	if err != nil {
+		log.Println("getUserIDFromToken error: ", err.Error())
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Parse the multipart form.
+	err = r.ParseMultipartForm(32 << 20) // limit your max input length!
+	if err != nil {
+		log.Println("can't parse multipart form: ", err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Get the file from the form.
+	file, handler, err := r.FormFile("file")
+	if err != nil {
+		log.Println("can't get file from form: ", err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Save the file to the server.
+	fileName, err := saveFileToServer(file, handler.Filename, userID)
+	if err != nil {
+		log.Println("can't save file to server: ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Store the file information in the database.
+	err = dbconnector.StoreFileData(userID, "files/"+fileName, fileName, s.db)
+	if err != nil {
+		log.Println("can't store file data: ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	fmt.Fprintf(w, "File stored successfully")
+}
+
+// saveFileToServer saves the file to the server.
+func saveFileToServer(file multipart.File, fileName string, userID int) (string, error) {
+	// Add the user ID to the file name.
+	fileNameParts := strings.Split(fileName, ".")
+	fileNameParts[0] = fmt.Sprintf("%s_%d", fileNameParts[0], userID)
+	fileName = strings.Join(fileNameParts, ".")
+
+	// Create the file on the server.
+	f, err := os.OpenFile("./files/"+fileName, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	// Copy the file to the server.
+	_, err = io.Copy(f, file)
+	if err != nil {
+		return "", err
+	}
+
+	return fileName, nil
+}
+
+// GetFileHandler handles the retrieval of user files.
+func (s *Server) GetFileHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Get file query")
+
+	// Get the user ID from the JWT token.
+	userID, err := getUserIDFromToken(r)
+	if err != nil {
+		log.Println("getUserIDFromToken error: ", err.Error())
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Get the file name from the query parameters.
+	fileName := r.URL.Query().Get("fileName")
+	if fileName == "" {
+		log.Println("fileName is not provided")
+		http.Error(w, "fileName is not provided", http.StatusBadRequest)
+		return
+	}
+
+	// Get the file path from the database.
+	filePath, err := dbconnector.GetFilePath(userID, fileName, s.db)
+	if err != nil {
+		log.Println("can't get file path: ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Open the file.
+	file, err := os.Open("./" + filePath)
+	if err != nil {
+		log.Println("can't open file: ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	// Set the appropriate headers.
+	w.Header().Set("Content-Disposition", "attachment; filename="+fileName)
+	w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
+
+	// Stream the file to the client.
+	_, err = io.Copy(w, file)
+	if err != nil {
+		log.Println("can't stream file: ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// ListFilesHandler handles the retrieval of all file names for a user.
+func (s *Server) ListFilesHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("List files query")
+
+	// Get the user ID from the JWT token.
+	userID, err := getUserIDFromToken(r)
+	if err != nil {
+		log.Println("getUserIDFromToken error: ", err.Error())
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Get the list of file names from the database.
+	fileNames, err := dbconnector.GetFileNames(userID, s.db)
+	if err != nil {
+		log.Println("can't get file names: ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Convert the list of file names to JSON.
+	fileNamesJSON, err := json.Marshal(fileNames)
+	if err != nil {
+		log.Println("can't marshal file names: ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Write the JSON to the response.
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(fileNamesJSON)
+}
+
+// DeleteFileHandler handles the deletion of user files.
+func (s *Server) DeleteFileHandler(w http.ResponseWriter, r *http.Request) {
+	// Get the user ID from the JWT token.
+	userID, err := getUserIDFromToken(r)
+	if err != nil {
+		log.Println("getUserIDFromToken error: ", err.Error())
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	// Get the file name from the query parameters.
+	fileName := r.URL.Query().Get("fileName")
+	if fileName == "" {
+		log.Println("fileName is not provided")
+		http.Error(w, "fileName is not provided", http.StatusBadRequest)
+		return
+	}
+
+	// Get the file path from the database.
+	filePath, err := dbconnector.GetFilePath(userID, fileName, s.db)
+	if err != nil {
+		log.Println("can't get file path: ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Check if the file exists on the server.
+	if _, err := os.Stat("./" + filePath); os.IsNotExist(err) {
+		log.Println("file does not exist on the server")
+		http.Error(w, "file does not exist on the server", http.StatusNotFound)
+		return
+	}
+
+	// Delete the file from the server.
+	err = os.Remove("./" + filePath)
+	if err != nil {
+		log.Println("can't delete file: ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Delete the file information from the database.
+	err = dbconnector.DeleteFileData(userID, fileName, s.db)
+	if err != nil {
+		log.Println("can't delete file data: ", err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "File deleted successfully")
 }

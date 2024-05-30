@@ -9,10 +9,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -824,5 +828,221 @@ func TestUpdateHandler(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestFileHandlers tests the file storage, listing, and retrieval handlers.
+func TestFileHandlers(t *testing.T) {
+	// Initialize the database and server
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.Close()
+	dbconnector.InitDB(db)
+	server := serverapi.NewServer(db)
+
+	// Create a test user
+	user := models.User{
+		Username: "testuser",
+		Password: "testpassword",
+	}
+	hasher := md5.New()
+	hasher.Write([]byte(user.Password))
+	hashedPassword := hex.EncodeToString(hasher.Sum(nil))
+	_, err = db.Exec("INSERT INTO users (username, password) VALUES (?, ?)", user.Username, hashedPassword)
+	if err != nil {
+		t.Fatalf("Failed to insert test user: %v", err)
+	}
+
+	// Set the JWT token in the request header
+	expirationTime := time.Now().Add(1 * time.Hour)
+	claims := &serverapi.Claims{
+		UserID: user.ID,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expirationTime.Unix(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(serverapi.JwtKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := &http.Cookie{
+		Name:    "token",
+		Value:   tokenString,
+		Expires: expirationTime,
+	}
+
+	// Create a TLS configuration with the server certificate
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{loadServerCertificate()},
+	}
+
+	r := mux.NewRouter()
+	r.HandleFunc("/store_file", server.StoreFileHandler)
+	r.HandleFunc("/get_file", server.GetFileHandler)
+	r.HandleFunc("/get_list_files", server.ListFilesHandler)
+	r.HandleFunc("/delete_file", server.DeleteFileHandler)
+
+	// Create a new HTTPS test server with the server's handler and TLS configuration
+	ts := httptest.NewTLSServer(r)
+	ts.TLS = tlsConfig
+	defer ts.Close()
+
+	// Create a client that skips certificate verification for testing purposes
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // This is not secure and should not be used in production
+			},
+		},
+	}
+
+	// Create a test file to upload.
+	filePath := "./testfile.txt"
+	file, err := os.Open(filePath)
+	if err != nil {
+		t.Fatalf("Failed to open test file: %v", err)
+	}
+	defer file.Close()
+
+	// Create a multipart writer to create the form data.
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
+	if err != nil {
+		t.Fatalf("Failed to create form file: %v", err)
+	}
+	_, err = io.Copy(part, file)
+	if err != nil {
+		t.Fatalf("Failed to copy file to form: %v", err)
+	}
+	err = writer.Close()
+	if err != nil {
+		t.Fatalf("Failed to close writer: %v", err)
+	}
+
+	// Make a request to store the file.
+	req, err := http.NewRequest("POST", "/store_file", &buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req.AddCookie(cookie)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	// Modify the request URL to point to the test server
+	req.URL, err = url.Parse(ts.URL + "/store_file")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send the request to the test server
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if res.StatusCode != http.StatusCreated {
+		t.Errorf("Expected status code %v, got %v", http.StatusCreated, res.StatusCode)
+	}
+
+	// Make a request to list the files.
+	req, err = http.NewRequest("GET", "/get_list_files", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req.AddCookie(cookie)
+
+	// Modify the request URL to point to the test server
+	req.URL, err = url.Parse(ts.URL + "/get_list_files")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err = client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %v, got %v", http.StatusOK, res.StatusCode)
+	}
+
+	// Parse the response to get the list of file names.
+	var fileNames []string
+	err = json.NewDecoder(res.Body).Decode(&fileNames)
+	if err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+	if len(fileNames) == 0 {
+		t.Fatalf("No files found")
+	}
+
+	// Make a request to get the first file.
+	req, err = http.NewRequest("GET", "/get_file?fileName="+fileNames[0], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req.AddCookie(cookie)
+
+	// Modify the request URL to point to the test server
+	req.URL, err = url.Parse(ts.URL + "/get_file?fileName=" + fileNames[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err = client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %v, got %v", http.StatusOK, res.StatusCode)
+	}
+
+	// Read the response body to get the file content.
+	fileContent, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("Failed to read response body: %v", err)
+	}
+
+	// Compare the file content with the original file.
+	originalFileContent, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("Failed to read original file: %v", err)
+	}
+	if !bytes.Equal(fileContent, originalFileContent) {
+		t.Errorf("File content does not match")
+	}
+
+	// Make a request to delete the first file.
+	req, err = http.NewRequest("GET", "/delete_file?fileName="+fileNames[0], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req.AddCookie(cookie)
+
+	// Modify the request URL to point to the test server
+	req.URL, err = url.Parse(ts.URL + "/delete_file?fileName=" + fileNames[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	res, err = client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %v, got %v", http.StatusOK, res.StatusCode)
+	}
+
+	// Check if the file was deleted.
+	if _, err := os.Stat("./" + fileNames[0]); !os.IsNotExist(err) {
+		t.Errorf("Expected file to be deleted, but it still exists")
 	}
 }

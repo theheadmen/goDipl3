@@ -32,6 +32,11 @@ func main() {
 	r.HandleFunc("/delete", server.DeleteHandler)
 	r.HandleFunc("/update", server.UpdateHandler)
 
+	r.HandleFunc("/store_file", server.StoreFileHandler)
+	r.HandleFunc("/get_file", server.GetFileHandler)
+	r.HandleFunc("/get_list_files", server.ListFilesHandler)
+	r.HandleFunc("/delete_file", server.DeleteFileHandler)
+
 	log.Println("Server is started")
 
 	serverReal := &http.Server{

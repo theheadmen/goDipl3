@@ -40,3 +40,12 @@ type BankCard struct {
 	Meta      string    `json:"meta"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+// FileData represents a saved file.
+type FileData struct {
+	ID        int       `json:"id"`
+	UserID    int       `json:"user_id"`
+	FilePath  string    `json:"file_path"`
+	FileName  string    `json:"file_name"`
+	CreatedAt time.Time `json:"created_at"`
+}

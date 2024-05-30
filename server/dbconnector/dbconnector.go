@@ -71,6 +71,21 @@ func InitDB(db *sql.DB) {
 		log.Fatalf("Failed to create bank_cards table: %v", err)
 	}
 
+	// Create the FileData table.
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS file_data (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			file_path TEXT NOT NULL,
+			file_name TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY(user_id) REFERENCES users(id)
+		)
+	`)
+	if err != nil {
+		log.Fatalf("Failed to create text_data table: %v", err)
+	}
+
 	log.Println("DB init success")
 }
 
@@ -316,5 +331,58 @@ func UpdateBankCard(userID int, dataID string, data map[string]interface{}, db *
 	}
 
 	_, err = db.Exec("UPDATE bank_cards SET number = ?, expiry = ?, cvv = ?, meta = ? WHERE id = ? AND user_id = ?", bankCard.Number, bankCard.Expiry, bankCard.CVV, bankCard.Meta, dataID, userID)
+	return err
+}
+
+// storeFileData stores file data for the given user.
+func StoreFileData(userID int, filePath string, fileName string, db *sql.DB) error {
+	fileData := models.FileData{
+		UserID:    userID,
+		FilePath:  filePath,
+		FileName:  fileName,
+		CreatedAt: time.Now(),
+	}
+
+	_, err := db.Exec("INSERT INTO file_data (user_id, file_path, file_name, created_at) VALUES (?, ?, ?, ?)", fileData.UserID, fileData.FilePath, fileData.FileName, fileData.CreatedAt)
+	return err
+}
+
+// getFilePath retrieves the file path from the database.
+func GetFilePath(userID int, fileName string, db *sql.DB) (string, error) {
+	var filePath string
+	err := db.QueryRow("SELECT file_path FROM file_data WHERE user_id = ? AND file_name = ?", userID, fileName).Scan(&filePath)
+	if err != nil {
+		return "", err
+	}
+	return filePath, nil
+}
+
+// getFileNames retrieves the list of file names from the database.
+func GetFileNames(userID int, db *sql.DB) ([]string, error) {
+	rows, err := db.Query("SELECT file_name FROM file_data WHERE user_id = ?", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var fileNames []string
+	for rows.Next() {
+		var fileName string
+		if err := rows.Scan(&fileName); err != nil {
+			return nil, err
+		}
+		fileNames = append(fileNames, fileName)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return fileNames, nil
+}
+
+// deleteFileData deletes file data for the given user.
+func DeleteFileData(userID int, fileName string, db *sql.DB) error {
+	_, err := db.Exec("DELETE FROM file_data WHERE user_id = ? AND file_name = ?", userID, fileName)
 	return err
 }
