@@ -11,9 +11,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -586,6 +588,280 @@ var deleteCmd = &cobra.Command{
 	},
 }
 
+var storeFileCmd = &cobra.Command{
+	Use:   "filestore [file path]",
+	Short: "Store a file on the server",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		filePath := args[0]
+
+		err := StoreFile(filePath)
+		if err != nil {
+			fmt.Println("Error storing file:", err)
+			os.Exit(1)
+		}
+	},
+}
+
+func StoreFile(filePath string) error {
+	// Открываем файл
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Создаем буфер для тела запроса
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// Добавляем файл в мультипарт-форму
+	part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(part, file)
+	if err != nil {
+		return err
+	}
+
+	// Закрываем мультипарт-форму
+	err = writer.Close()
+	if err != nil {
+		return err
+	}
+
+	// Создаем URL с параметром типа данных
+	baseURL, err := url.Parse("https://localhost:8080/store_file")
+	if err != nil {
+		fmt.Println("Error parsing URL:", err)
+		return err
+	}
+
+	// Создаем новый транспорт, который будет использовать TLS
+	// Используйте InsecureSkipVerify: false для рабочей среды
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+
+	req, err := http.NewRequest("POST", baseURL.String(), body)
+	// Устанавливаем заголовок Content-Type
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	if err != nil {
+		fmt.Println("Error creating request:", err)
+		return err
+	}
+
+	// Установка cookie в заголовки запроса
+	for _, cookie := range authCookies {
+		req.AddCookie(cookie)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error sending store request:", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		fmt.Println("Store failed with status:", resp.Status)
+		return err
+	}
+
+	fmt.Println("File stored successfully.")
+	return nil
+}
+
+var listFilesCmd = &cobra.Command{
+	Use:   "listfiles",
+	Short: "List all file names for a user",
+	Args:  cobra.ExactArgs(0),
+	Run: func(cmd *cobra.Command, args []string) {
+		// Создаем запрос
+		// Создаем URL с параметром типа данных
+		baseURL, err := url.Parse("https://localhost:8080/get_list_files")
+		if err != nil {
+			fmt.Println("Error parsing URL:", err)
+			os.Exit(1)
+		}
+
+		// Создаем новый транспорт, который будет использовать TLS
+		// Используйте InsecureSkipVerify: false для рабочей среды
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{Transport: tr}
+
+		req, err := http.NewRequest("GET", baseURL.String(), nil)
+		if err != nil {
+			fmt.Println("Error creating request:", err)
+			os.Exit(1)
+		}
+
+		// Установка cookie в заголовки запроса
+		for _, cookie := range authCookies {
+			req.AddCookie(cookie)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println("Error sending list files request:", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+
+		// Проверяем статус ответа
+		if resp.StatusCode != http.StatusOK {
+			fmt.Println("List files failed with status:", resp.Status)
+			os.Exit(1)
+		}
+
+		// Читаем тело ответа
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println("Error reading response body:", err)
+			os.Exit(1)
+		}
+
+		// Парсим JSON ответа
+		var fileNames []string
+		err = json.Unmarshal(body, &fileNames)
+		if err != nil {
+			fmt.Println("Error parsing JSON:", err)
+			os.Exit(1)
+		}
+
+		// Выводим список имен файлов
+		for _, fileName := range fileNames {
+			fmt.Println(fileName)
+		}
+	},
+}
+
+var getFileCmd = &cobra.Command{
+	Use:   "getfile [server_filename] [local_filename]",
+	Short: "Get a file from the server and save it to a local file",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		serverFilename := args[0]
+		localFilename := args[1]
+
+		// Создаем URL с параметром типа данных
+		baseURL, err := url.Parse("https://localhost:8080/get_file")
+		if err != nil {
+			fmt.Println("Error parsing URL:", err)
+			os.Exit(1)
+		}
+
+		params := url.Values{}
+		params.Add("fileName", serverFilename)
+		baseURL.RawQuery = params.Encode()
+
+		// Создаем новый транспорт, который будет использовать TLS
+		// Используйте InsecureSkipVerify: false для рабочей среды
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{Transport: tr}
+
+		req, err := http.NewRequest("GET", baseURL.String(), nil)
+		if err != nil {
+			fmt.Println("Error creating request:", err)
+			os.Exit(1)
+		}
+
+		// Установка cookie в заголовки запроса
+		for _, cookie := range authCookies {
+			req.AddCookie(cookie)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println("Error sending get file request:", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+
+		// Проверяем статус ответа
+		if resp.StatusCode != http.StatusOK {
+			fmt.Println("Get file failed with status:", resp.Status)
+			os.Exit(1)
+		}
+
+		// Читаем тело ответа
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println("Error reading response body:", err)
+			os.Exit(1)
+		}
+
+		// Записываем данные в локальный файл
+		err = os.WriteFile(localFilename, body, 0644)
+		if err != nil {
+			fmt.Println("Error writing to file:", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("File saved to %s\n", localFilename)
+	},
+}
+
+var deleteFileCmd = &cobra.Command{
+	Use:   "deletefile [fileName]",
+	Short: "Delete a file from the server",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		fileName := args[0]
+
+		// Создаем URL с параметром fileName
+		// Создаем URL с параметром типа данных
+		baseURL, err := url.Parse("https://localhost:8080/delete_file")
+		if err != nil {
+			fmt.Println("Error parsing URL:", err)
+			os.Exit(1)
+		}
+
+		params := url.Values{}
+		params.Add("fileName", fileName)
+		baseURL.RawQuery = params.Encode()
+
+		// Создаем новый транспорт, который будет использовать TLS
+		// Используйте InsecureSkipVerify: false для рабочей среды
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := &http.Client{Transport: tr}
+
+		req, err := http.NewRequest("DELETE", baseURL.String(), nil)
+		if err != nil {
+			fmt.Println("Error creating request:", err)
+			os.Exit(1)
+		}
+
+		// Установка cookie в заголовки запроса
+		for _, cookie := range authCookies {
+			req.AddCookie(cookie)
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Println("Error sending delete file request:", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+
+		// Проверяем статус ответа
+		if resp.StatusCode != http.StatusOK {
+			fmt.Println("Delete file failed with status:", resp.Status)
+			os.Exit(1)
+		}
+
+		fmt.Println("File deleted successfully.")
+	},
+}
+
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of GophKeeper CLI",
@@ -682,5 +958,8 @@ func init() {
 	updateCmd.Flags().StringP("expiry", "e", "", "Expiry date for the card")
 	updateCmd.Flags().StringP("cvv", "c", "", "CVV code for the card")
 	RootCmd.AddCommand(updateCmd)
-
+	RootCmd.AddCommand(storeFileCmd)
+	RootCmd.AddCommand(listFilesCmd)
+	RootCmd.AddCommand(getFileCmd)
+	RootCmd.AddCommand(deleteFileCmd)
 }
