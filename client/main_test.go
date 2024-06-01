@@ -342,3 +342,106 @@ func TestDeleteBankcard(t *testing.T) {
 		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
 	}
 }
+
+// TestFilestore tests the file store process.
+func TestFilestore(t *testing.T) {
+	fileName := "./cookies.txt"
+
+	// Execute the get command.
+	cmd := exec.Command("go", "run", "main.go", "filestore", fileName)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("file store command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput := "File stored successfully."
+	if !strings.Contains(out.String(), expectedOutput) {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+}
+
+// TestListfiles tests the get list of files process.
+func TestListfiles(t *testing.T) {
+	// Execute the get command.
+	cmd := exec.Command("go", "run", "main.go", "listfiles")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("list files command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput := "cookies"
+	if !strings.Contains(out.String(), expectedOutput) {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+}
+
+// TestGetFile tests the get file process.
+func TestGetFile(t *testing.T) {
+	// Execute the get command.
+	cmd := exec.Command("go", "run", "main.go", "listfiles")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("list files command failed: %v", err)
+	}
+
+	fileName := out.String()
+	fileName = strings.Replace(fileName, "\n", "", -1)
+	localFileName := "./cok2.txt"
+
+	// Execute the get command.
+	cmd = exec.Command("go", "run", "main.go", "getfile", fileName, localFileName)
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("get store command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput := "File saved to " + localFileName
+	if !strings.Contains(out.String(), expectedOutput) {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+
+	file, err := os.Open(localFileName)
+	if err != nil {
+		t.Errorf("Error opening file: %s", err)
+	}
+	file.Close()
+}
+
+// TestDeleteFile tests the delete file process.
+func TestDeleteFile(t *testing.T) {
+	// Execute the get command.
+	cmd := exec.Command("go", "run", "main.go", "listfiles")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("list files command failed: %v", err)
+	}
+
+	fileName := out.String()
+	fileName = strings.Replace(fileName, "\n", "", -1)
+	// Execute the get command.
+	cmd = exec.Command("go", "run", "main.go", "deletefile", fileName)
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("get store command failed: %v", err)
+	}
+
+	// Check the output.
+	expectedOutput := "File deleted successfully."
+	if !strings.Contains(out.String(), expectedOutput) {
+		t.Errorf("expected output %q, got %q", expectedOutput, out.String())
+	}
+
+	// Delete the file.
+	localFileName := "./cok2.txt"
+	err := os.Remove(localFileName)
+	if err != nil {
+		t.Fatalf("delete file command failed: %v", err)
+	}
+}

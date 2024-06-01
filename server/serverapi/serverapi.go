@@ -460,10 +460,12 @@ func (s *Server) GetFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Println("we try to get", fileName, "for", userID)
+
 	// Get the file path from the database.
 	filePath, err := dbconnector.GetFilePath(userID, fileName, s.db)
 	if err != nil {
-		log.Println("can't get file path: ", err.Error())
+		log.Println("can't get file path: ", err.Error(), fileName)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
