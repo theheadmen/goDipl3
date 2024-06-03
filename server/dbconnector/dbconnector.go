@@ -107,13 +107,7 @@ func GetUserByName(username string, db *sql.DB) (models.User, error) {
 }
 
 // storeTextData stores text data for the given user.
-func StoreTextData(userID int, data map[string]interface{}, db *sql.DB) error {
-	textData := models.TextData{
-		UserID:    userID,
-		Data:      data["data"].(string),
-		Meta:      data["meta"].(string),
-		CreatedAt: time.Now(),
-	}
+func StoreTextData(textData models.TextData, db *sql.DB) error {
 	log.Println("store text", textData)
 
 	_, err := db.Exec("INSERT INTO text_data (user_id, data, meta, created_at) VALUES (?, ?, ?, ?)", textData.UserID, textData.Data, textData.Meta, textData.CreatedAt)
@@ -121,28 +115,16 @@ func StoreTextData(userID int, data map[string]interface{}, db *sql.DB) error {
 }
 
 // storeBinaryData stores binary data for the given user.
-func StoreBinaryData(userID int, data map[string]interface{}, db *sql.DB) error {
-	binaryData := models.BinaryData{
-		UserID:    userID,
-		Data:      []byte(data["data"].(string)),
-		Meta:      data["meta"].(string),
-		CreatedAt: time.Now(),
-	}
+func StoreBinaryData(binaryData models.BinaryData, db *sql.DB) error {
+	log.Println("store binary", binaryData)
 
 	_, err := db.Exec("INSERT INTO binary_data (user_id, data, meta, created_at) VALUES (?, ?, ?, ?)", binaryData.UserID, binaryData.Data, binaryData.Meta, binaryData.CreatedAt)
 	return err
 }
 
 // storeBankCard stores bank card data for the given user.
-func StoreBankCard(userID int, data map[string]interface{}, db *sql.DB) error {
-	bankCard := models.BankCard{
-		UserID:    userID,
-		Number:    data["number"].(string),
-		Expiry:    data["expiry"].(string),
-		CVV:       data["cvv"].(string),
-		Meta:      data["meta"].(string),
-		CreatedAt: time.Now(),
-	}
+func StoreBankCard(bankCard models.BankCard, db *sql.DB) error {
+	log.Println("store bank card", bankCard)
 
 	_, err := db.Exec("INSERT INTO bank_cards (user_id, number, expiry, cvv, meta, created_at) VALUES (?, ?, ?, ?, ?, ?)", bankCard.UserID, bankCard.Number, bankCard.Expiry, bankCard.CVV, bankCard.Meta, bankCard.CreatedAt)
 	return err

@@ -6,7 +6,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -21,6 +20,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/theheadmen/goDipl3/models"
+	"github.com/theheadmen/goDipl3/utils"
 )
 
 var (
@@ -104,14 +104,13 @@ var registerCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Создаем новый транспорт, который будет использовать TLS
-		// Используйте InsecureSkipVerify: false для рабочей среды
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		// Создаем URL с параметром типа данных
+		baseURL, err := url.Parse("https://localhost:8080/register")
+		if err != nil {
+			fmt.Println("Error parsing URL:", err)
+			os.Exit(1)
 		}
-		client := &http.Client{Transport: tr}
-
-		resp, err := client.Post("https://localhost:8080/register", "application/json", bytes.NewBuffer(userJson))
+		resp, err := utils.SendRequest(baseURL, bytes.NewBuffer(userJson), "POST", "application/json", false, authCookies)
 		if err != nil {
 			fmt.Println("Error sending registration request:", err)
 			os.Exit(1)
@@ -147,14 +146,13 @@ var loginCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Создаем новый транспорт, который будет использовать TLS
-		// Используйте InsecureSkipVerify: false для рабочей среды
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		// Создаем URL с параметром типа данных
+		baseURL, err := url.Parse("https://localhost:8080/login")
+		if err != nil {
+			fmt.Println("Error parsing URL:", err)
+			os.Exit(1)
 		}
-		client := &http.Client{Transport: tr}
-
-		resp, err := client.Post("https://localhost:8080/login", "application/json", bytes.NewBuffer(userJson))
+		resp, err := utils.SendRequest(baseURL, bytes.NewBuffer(userJson), "POST", "application/json", false, authCookies)
 		if err != nil {
 			fmt.Println("Error sending login request:", err)
 			os.Exit(1)
@@ -252,27 +250,7 @@ var storeCmd = &cobra.Command{
 		params.Add("type", dataType)
 		baseURL.RawQuery = params.Encode()
 
-		// Создаем новый транспорт, который будет использовать TLS
-		// Используйте InsecureSkipVerify: false для рабочей среды
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		client := &http.Client{Transport: tr}
-
-		req, err := http.NewRequest("POST", baseURL.String(), bytes.NewBuffer(dataJson))
-		if err != nil {
-			fmt.Println("Error creating request:", err)
-			os.Exit(1)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-
-		// Установка cookie в заголовки запроса
-		for _, cookie := range authCookies {
-			req.AddCookie(cookie)
-		}
-
-		resp, err := client.Do(req)
+		resp, err := utils.SendRequest(baseURL, bytes.NewBuffer(dataJson), "POST", "application/json", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending store request:", err)
 			os.Exit(1)
@@ -368,27 +346,7 @@ var updateCmd = &cobra.Command{
 		params.Add("data_id", dataID)
 		baseURL.RawQuery = params.Encode()
 
-		// Создаем новый транспорт, который будет использовать TLS
-		// Используйте InsecureSkipVerify: false для рабочей среды
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		client := &http.Client{Transport: tr}
-
-		req, err := http.NewRequest("POST", baseURL.String(), bytes.NewBuffer(dataJson))
-		if err != nil {
-			fmt.Println("Error creating request:", err)
-			os.Exit(1)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-
-		// Установка cookie в заголовки запроса
-		for _, cookie := range authCookies {
-			req.AddCookie(cookie)
-		}
-
-		resp, err := client.Do(req)
+		resp, err := utils.SendRequest(baseURL, bytes.NewBuffer(dataJson), "POST", "application/json", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending update request:", err)
 			os.Exit(1)
@@ -423,24 +381,7 @@ var getCmd = &cobra.Command{
 		params.Add("type", dataType)
 		baseURL.RawQuery = params.Encode()
 
-		// Создаем новый транспорт, который будет использовать TLS
-		// Используйте InsecureSkipVerify: false для рабочей среды
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		client := &http.Client{Transport: tr}
-		req, err := http.NewRequest("GET", baseURL.String(), nil)
-		if err != nil {
-			fmt.Println("Error creating request:", err)
-			os.Exit(1)
-		}
-
-		// Установка cookie в заголовки запроса
-		for _, cookie := range authCookies {
-			req.AddCookie(cookie)
-		}
-
-		resp, err := client.Do(req)
+		resp, err := utils.SendRequest(baseURL, nil, "GET", "", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending get request:", err)
 			os.Exit(1)
@@ -554,25 +495,7 @@ var deleteCmd = &cobra.Command{
 		params.Add("id", dataID)
 		baseURL.RawQuery = params.Encode()
 
-		// Создаем новый транспорт, который будет использовать TLS
-		// Используйте InsecureSkipVerify: false для рабочей среды
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		client := &http.Client{Transport: tr}
-
-		req, err := http.NewRequest("POST", baseURL.String(), nil)
-		if err != nil {
-			fmt.Println("Error creating request:", err)
-			os.Exit(1)
-		}
-
-		// Установка cookie в заголовки запроса
-		for _, cookie := range authCookies {
-			req.AddCookie(cookie)
-		}
-
-		resp, err := client.Do(req)
+		resp, err := utils.SendRequest(baseURL, nil, "POST", "", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending delete request:", err)
 			os.Exit(1)
@@ -638,27 +561,7 @@ func StoreFile(filePath string) error {
 		return err
 	}
 
-	// Создаем новый транспорт, который будет использовать TLS
-	// Используйте InsecureSkipVerify: false для рабочей среды
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	client := &http.Client{Transport: tr}
-
-	req, err := http.NewRequest("POST", baseURL.String(), body)
-	// Устанавливаем заголовок Content-Type
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	if err != nil {
-		fmt.Println("Error creating request:", err)
-		return err
-	}
-
-	// Установка cookie в заголовки запроса
-	for _, cookie := range authCookies {
-		req.AddCookie(cookie)
-	}
-
-	resp, err := client.Do(req)
+	resp, err := utils.SendRequest(baseURL, body, "POST", writer.FormDataContentType(), true, authCookies)
 	if err != nil {
 		fmt.Println("Error sending store request:", err)
 		return err
@@ -687,25 +590,7 @@ var listFilesCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Создаем новый транспорт, который будет использовать TLS
-		// Используйте InsecureSkipVerify: false для рабочей среды
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		client := &http.Client{Transport: tr}
-
-		req, err := http.NewRequest("GET", baseURL.String(), nil)
-		if err != nil {
-			fmt.Println("Error creating request:", err)
-			os.Exit(1)
-		}
-
-		// Установка cookie в заголовки запроса
-		for _, cookie := range authCookies {
-			req.AddCookie(cookie)
-		}
-
-		resp, err := client.Do(req)
+		resp, err := utils.SendRequest(baseURL, nil, "GET", "", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending list files request:", err)
 			os.Exit(1)
@@ -759,25 +644,7 @@ var getFileCmd = &cobra.Command{
 		params.Add("fileName", serverFilename)
 		baseURL.RawQuery = params.Encode()
 
-		// Создаем новый транспорт, который будет использовать TLS
-		// Используйте InsecureSkipVerify: false для рабочей среды
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		client := &http.Client{Transport: tr}
-
-		req, err := http.NewRequest("GET", baseURL.String(), nil)
-		if err != nil {
-			fmt.Println("Error creating request:", err)
-			os.Exit(1)
-		}
-
-		// Установка cookie в заголовки запроса
-		for _, cookie := range authCookies {
-			req.AddCookie(cookie)
-		}
-
-		resp, err := client.Do(req)
+		resp, err := utils.SendRequest(baseURL, nil, "GET", "application/json", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending get file request:", err)
 			os.Exit(1)
@@ -827,25 +694,7 @@ var deleteFileCmd = &cobra.Command{
 		params.Add("fileName", fileName)
 		baseURL.RawQuery = params.Encode()
 
-		// Создаем новый транспорт, который будет использовать TLS
-		// Используйте InsecureSkipVerify: false для рабочей среды
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		client := &http.Client{Transport: tr}
-
-		req, err := http.NewRequest("DELETE", baseURL.String(), nil)
-		if err != nil {
-			fmt.Println("Error creating request:", err)
-			os.Exit(1)
-		}
-
-		// Установка cookie в заголовки запроса
-		for _, cookie := range authCookies {
-			req.AddCookie(cookie)
-		}
-
-		resp, err := client.Do(req)
+		resp, err := utils.SendRequest(baseURL, nil, "DELETE", "", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending delete file request:", err)
 			os.Exit(1)

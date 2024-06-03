@@ -17,6 +17,7 @@ import (
 	"github.com/golang-jwt/jwt"
 	"github.com/theheadmen/goDipl3/models"
 	"github.com/theheadmen/goDipl3/server/dbconnector"
+	"github.com/theheadmen/goDipl3/utils"
 )
 
 // Server is a struct that holds the database connection.
@@ -191,11 +192,26 @@ func (s *Server) StoreHandler(w http.ResponseWriter, r *http.Request) {
 	// Store the data based on the type.
 	switch dataType {
 	case "text":
-		err = dbconnector.StoreTextData(userID, data, s.db)
+		textData, cerr := utils.CreateTextData(userID, data)
+		if cerr != nil {
+			http.Error(w, cerr.Error(), http.StatusBadRequest)
+			return
+		}
+		err = dbconnector.StoreTextData(textData, s.db)
 	case "binary":
-		err = dbconnector.StoreBinaryData(userID, data, s.db)
+		binaryData, cerr := utils.CreateBinaryData(userID, data)
+		if cerr != nil {
+			http.Error(w, cerr.Error(), http.StatusBadRequest)
+			return
+		}
+		err = dbconnector.StoreBinaryData(binaryData, s.db)
 	case "bankcard":
-		err = dbconnector.StoreBankCard(userID, data, s.db)
+		bankCard, cerr := utils.CreateBankCard(userID, data)
+		if cerr != nil {
+			http.Error(w, cerr.Error(), http.StatusBadRequest)
+			return
+		}
+		err = dbconnector.StoreBankCard(bankCard, s.db)
 	default:
 		log.Println("invalid data type: ", dataType)
 		http.Error(w, "Invalid data type", http.StatusBadRequest)

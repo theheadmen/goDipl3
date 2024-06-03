@@ -815,7 +815,7 @@ func TestUpdateHandler(t *testing.T) {
 					}
 
 					// Compare the meta data
-					if retrievedData[0]["meta"] != tc.data["meta"] {
+					if retrievedData[0]["meta"] != tc.dataUpd["meta"] {
 						t.Errorf("retrieved meta does not match stored meta: got %v want %v", retrievedData[0]["meta"], tc.dataUpd["meta"])
 					}
 				} else {
