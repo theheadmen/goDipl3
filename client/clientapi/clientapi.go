@@ -512,13 +512,14 @@ var deleteCmd = &cobra.Command{
 }
 
 var storeFileCmd = &cobra.Command{
-	Use:   "filestore [file path]",
+	Use:   "filestore [file path] KEY",
 	Short: "Store a file on the server",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		filePath := args[0]
+		key := []byte(args[1])
 
-		err := StoreFile(filePath)
+		err := StoreFile(filePath, key)
 		if err != nil {
 			fmt.Println("Error storing file:", err)
 			os.Exit(1)
@@ -526,13 +527,25 @@ var storeFileCmd = &cobra.Command{
 	},
 }
 
-func StoreFile(filePath string) error {
+func StoreFile(filePath string, key []byte) error {
 	// Открываем файл
 	file, err := os.Open(filePath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
+
+	// Читаем содержимое файла
+	fileContent, err := io.ReadAll(file)
+	if err != nil {
+		return err
+	}
+
+	// Шифруем содержимое файла
+	encryptedContent, err := Encrypt(key, string(fileContent))
+	if err != nil {
+		return err
+	}
 
 	// Создаем буфер для тела запроса
 	body := &bytes.Buffer{}
@@ -543,7 +556,7 @@ func StoreFile(filePath string) error {
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(part, file)
+	_, err = io.Copy(part, strings.NewReader(encryptedContent))
 	if err != nil {
 		return err
 	}
@@ -626,12 +639,13 @@ var listFilesCmd = &cobra.Command{
 }
 
 var getFileCmd = &cobra.Command{
-	Use:   "getfile [server_filename] [local_filename]",
+	Use:   "getfile [server_filename] [local_filename] KEY",
 	Short: "Get a file from the server and save it to a local file",
-	Args:  cobra.ExactArgs(2),
+	Args:  cobra.ExactArgs(3),
 	Run: func(cmd *cobra.Command, args []string) {
 		serverFilename := args[0]
 		localFilename := args[1]
+		key := []byte(args[2])
 
 		// Создаем URL с параметром типа данных
 		baseURL, err := url.Parse("https://localhost:8080/get_file")
@@ -664,8 +678,15 @@ var getFileCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		// Расшифровываем полученные данные
+		decryptedData, err := Decrypt(key, string(body))
+		if err != nil {
+			fmt.Println("Error decrypting data:", err)
+			os.Exit(1)
+		}
+
 		// Записываем данные в локальный файл
-		err = os.WriteFile(localFilename, body, 0644)
+		err = os.WriteFile(localFilename, []byte(decryptedData), 0644)
 		if err != nil {
 			fmt.Println("Error writing to file:", err)
 			os.Exit(1)

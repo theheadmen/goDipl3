@@ -348,7 +348,7 @@ func TestFilestore(t *testing.T) {
 	fileName := "./cookies.txt"
 
 	// Execute the get command.
-	cmd := exec.Command("go", "run", "main.go", "filestore", fileName)
+	cmd := exec.Command("go", "run", "main.go", "filestore", fileName, "somekey")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -394,7 +394,7 @@ func TestGetFile(t *testing.T) {
 	localFileName := "./cok2.txt"
 
 	// Execute the get command.
-	cmd = exec.Command("go", "run", "main.go", "getfile", fileName, localFileName)
+	cmd = exec.Command("go", "run", "main.go", "getfile", fileName, localFileName, "somekey")
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("get store command failed: %v", err)
