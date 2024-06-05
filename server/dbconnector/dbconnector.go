@@ -32,6 +32,7 @@ func InitDB(db *sql.DB) {
 			data TEXT NOT NULL,
 			meta TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		)
 	`)
@@ -47,6 +48,7 @@ func InitDB(db *sql.DB) {
 			data BLOB NOT NULL,
 			meta TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		)
 	`)
@@ -64,6 +66,7 @@ func InitDB(db *sql.DB) {
 			cvv TEXT NOT NULL,
 			meta TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		)
 	`)
@@ -79,6 +82,7 @@ func InitDB(db *sql.DB) {
 			file_path TEXT NOT NULL,
 			file_name TEXT NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY(user_id) REFERENCES users(id)
 		)
 	`)
@@ -110,7 +114,7 @@ func GetUserByName(username string, db *sql.DB) (models.User, error) {
 func StoreTextData(textData models.TextData, db *sql.DB) error {
 	log.Println("store text", textData)
 
-	_, err := db.Exec("INSERT INTO text_data (user_id, data, meta, created_at) VALUES (?, ?, ?, ?)", textData.UserID, textData.Data, textData.Meta, textData.CreatedAt)
+	_, err := db.Exec("INSERT INTO text_data (user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", textData.UserID, textData.Data, textData.Meta, textData.CreatedAt, textData.UpdatedAt)
 	return err
 }
 
@@ -118,7 +122,7 @@ func StoreTextData(textData models.TextData, db *sql.DB) error {
 func StoreBinaryData(binaryData models.BinaryData, db *sql.DB) error {
 	log.Println("store binary", binaryData)
 
-	_, err := db.Exec("INSERT INTO binary_data (user_id, data, meta, created_at) VALUES (?, ?, ?, ?)", binaryData.UserID, binaryData.Data, binaryData.Meta, binaryData.CreatedAt)
+	_, err := db.Exec("INSERT INTO binary_data (user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", binaryData.UserID, binaryData.Data, binaryData.Meta, binaryData.CreatedAt, binaryData.UpdatedAt)
 	return err
 }
 
@@ -126,13 +130,13 @@ func StoreBinaryData(binaryData models.BinaryData, db *sql.DB) error {
 func StoreBankCard(bankCard models.BankCard, db *sql.DB) error {
 	log.Println("store bank card", bankCard)
 
-	_, err := db.Exec("INSERT INTO bank_cards (user_id, number, expiry, cvv, meta, created_at) VALUES (?, ?, ?, ?, ?, ?)", bankCard.UserID, bankCard.Number, bankCard.Expiry, bankCard.CVV, bankCard.Meta, bankCard.CreatedAt)
+	_, err := db.Exec("INSERT INTO bank_cards (user_id, number, expiry, cvv, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", bankCard.UserID, bankCard.Number, bankCard.Expiry, bankCard.CVV, bankCard.Meta, bankCard.CreatedAt, bankCard.UpdatedAt)
 	return err
 }
 
 // retrieveTextData retrieves text data for the given user.
 func RetrieveTextData(userID int, db *sql.DB) ([]models.TextData, error) {
-	rows, err := db.Query("SELECT id, user_id, data, meta, created_at FROM text_data WHERE user_id = ?", userID)
+	rows, err := db.Query("SELECT id, user_id, data, meta, created_at, updated_at FROM text_data WHERE user_id = ?", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +145,7 @@ func RetrieveTextData(userID int, db *sql.DB) ([]models.TextData, error) {
 	var textDataList []models.TextData
 	for rows.Next() {
 		var textData models.TextData
-		err := rows.Scan(&textData.ID, &textData.UserID, &textData.Data, &textData.Meta, &textData.CreatedAt)
+		err := rows.Scan(&textData.ID, &textData.UserID, &textData.Data, &textData.Meta, &textData.CreatedAt, &textData.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -153,7 +157,7 @@ func RetrieveTextData(userID int, db *sql.DB) ([]models.TextData, error) {
 
 // retrieveBinaryData retrieves binary data for the given user.
 func RetrieveBinaryData(userID int, db *sql.DB) ([]models.BinaryData, error) {
-	rows, err := db.Query("SELECT id, user_id, data, meta, created_at FROM binary_data WHERE user_id = ?", userID)
+	rows, err := db.Query("SELECT id, user_id, data, meta, created_at, updated_at FROM binary_data WHERE user_id = ?", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +166,7 @@ func RetrieveBinaryData(userID int, db *sql.DB) ([]models.BinaryData, error) {
 	var binaryDataList []models.BinaryData
 	for rows.Next() {
 		var binaryData models.BinaryData
-		err := rows.Scan(&binaryData.ID, &binaryData.UserID, &binaryData.Data, &binaryData.Meta, &binaryData.CreatedAt)
+		err := rows.Scan(&binaryData.ID, &binaryData.UserID, &binaryData.Data, &binaryData.Meta, &binaryData.CreatedAt, &binaryData.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -174,7 +178,7 @@ func RetrieveBinaryData(userID int, db *sql.DB) ([]models.BinaryData, error) {
 
 // retrieveBankCards retrieves bank card data for the given user.
 func RetrieveBankCards(userID int, db *sql.DB) ([]models.BankCard, error) {
-	rows, err := db.Query("SELECT id, user_id, number, expiry, cvv, meta, created_at FROM bank_cards WHERE user_id = ?", userID)
+	rows, err := db.Query("SELECT id, user_id, number, expiry, cvv, meta, created_at, updated_at FROM bank_cards WHERE user_id = ?", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +187,7 @@ func RetrieveBankCards(userID int, db *sql.DB) ([]models.BankCard, error) {
 	var bankCardsList []models.BankCard
 	for rows.Next() {
 		var bankCard models.BankCard
-		err := rows.Scan(&bankCard.ID, &bankCard.UserID, &bankCard.Number, &bankCard.Expiry, &bankCard.CVV, &bankCard.Meta, &bankCard.CreatedAt)
+		err := rows.Scan(&bankCard.ID, &bankCard.UserID, &bankCard.Number, &bankCard.Expiry, &bankCard.CVV, &bankCard.Meta, &bankCard.CreatedAt, &bankCard.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -257,14 +261,14 @@ func UpdateTextData(userID int, dataID string, data map[string]interface{}, db *
 	}
 
 	textData := models.TextData{
-		UserID: userID,
-		Data:   data["data"].(string),
-		Meta:   data["meta"].(string),
-		//UpdatedAt: time.Now(),
+		UserID:    userID,
+		Data:      data["data"].(string),
+		Meta:      data["meta"].(string),
+		UpdatedAt: time.Now(),
 	}
 	log.Println("update text", textData)
 
-	_, err = db.Exec("UPDATE text_data SET data = ?, meta = ? WHERE id = ? AND user_id = ?", textData.Data, textData.Meta, dataID, userID)
+	_, err = db.Exec("UPDATE text_data SET data = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?", textData.Data, textData.Meta, textData.UpdatedAt, dataID, userID)
 	return err
 }
 
@@ -281,13 +285,13 @@ func UpdateBinaryData(userID int, dataID string, data map[string]interface{}, db
 	}
 
 	binaryData := models.BinaryData{
-		UserID: userID,
-		Data:   []byte(data["data"].(string)),
-		Meta:   data["meta"].(string),
-		//UpdatedAt: time.Now(),
+		UserID:    userID,
+		Data:      []byte(data["data"].(string)),
+		Meta:      data["meta"].(string),
+		UpdatedAt: time.Now(),
 	}
 
-	_, err = db.Exec("UPDATE binary_data SET data = ?, meta = ? WHERE id = ? AND user_id = ?", binaryData.Data, binaryData.Meta, dataID, userID)
+	_, err = db.Exec("UPDATE binary_data SET data = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?", binaryData.Data, binaryData.Meta, binaryData.UpdatedAt, dataID, userID)
 	return err
 }
 
@@ -304,15 +308,15 @@ func UpdateBankCard(userID int, dataID string, data map[string]interface{}, db *
 	}
 
 	bankCard := models.BankCard{
-		UserID: userID,
-		Number: data["number"].(string),
-		Expiry: data["expiry"].(string),
-		CVV:    data["cvv"].(string),
-		Meta:   data["meta"].(string),
-		//UpdatedAt: time.Now(),
+		UserID:    userID,
+		Number:    data["number"].(string),
+		Expiry:    data["expiry"].(string),
+		CVV:       data["cvv"].(string),
+		Meta:      data["meta"].(string),
+		UpdatedAt: time.Now(),
 	}
 
-	_, err = db.Exec("UPDATE bank_cards SET number = ?, expiry = ?, cvv = ?, meta = ? WHERE id = ? AND user_id = ?", bankCard.Number, bankCard.Expiry, bankCard.CVV, bankCard.Meta, dataID, userID)
+	_, err = db.Exec("UPDATE bank_cards SET number = ?, expiry = ?, cvv = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?", bankCard.Number, bankCard.Expiry, bankCard.CVV, bankCard.Meta, bankCard.UpdatedAt, dataID, userID)
 	return err
 }
 
@@ -323,9 +327,10 @@ func StoreFileData(userID int, filePath string, fileName string, db *sql.DB) err
 		FilePath:  filePath,
 		FileName:  fileName,
 		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
-	_, err := db.Exec("INSERT INTO file_data (user_id, file_path, file_name, created_at) VALUES (?, ?, ?, ?)", fileData.UserID, fileData.FilePath, fileData.FileName, fileData.CreatedAt)
+	_, err := db.Exec("INSERT INTO file_data (user_id, file_path, file_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)", fileData.UserID, fileData.FilePath, fileData.FileName, fileData.CreatedAt, fileData.UpdatedAt)
 	return err
 }
 

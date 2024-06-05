@@ -26,6 +26,7 @@ func CreateTextData(userID int, data map[string]interface{}) (models.TextData, e
 		Data:      text,
 		Meta:      meta,
 		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}, nil
 }
 
@@ -44,6 +45,7 @@ func CreateBinaryData(userID int, data map[string]interface{}) (models.BinaryDat
 		Data:      []byte(binary),
 		Meta:      meta,
 		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}, nil
 }
 
@@ -72,6 +74,7 @@ func CreateBankCard(userID int, data map[string]interface{}) (models.BankCard, e
 		CVV:       cvv,
 		Meta:      meta,
 		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}, nil
 }
 

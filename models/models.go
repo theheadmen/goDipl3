@@ -19,6 +19,7 @@ type TextData struct {
 	Data      string    `json:"data"`
 	Meta      string    `json:"meta"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // BinaryData represents a piece of binary data.
@@ -28,6 +29,7 @@ type BinaryData struct {
 	Data      []byte    `json:"data"`
 	Meta      string    `json:"meta"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // BankCard represents a bank card.
@@ -39,6 +41,7 @@ type BankCard struct {
 	CVV       string    `json:"cvv"`
 	Meta      string    `json:"meta"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // FileData represents a saved file.
@@ -48,4 +51,5 @@ type FileData struct {
 	FilePath  string    `json:"file_path"`
 	FileName  string    `json:"file_name"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
