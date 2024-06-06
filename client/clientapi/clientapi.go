@@ -6,10 +6,12 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -18,7 +20,9 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
+	"github.com/theheadmen/goDipl3/client/dbconnector"
 	"github.com/theheadmen/goDipl3/models"
 	"github.com/theheadmen/goDipl3/utils"
 )
@@ -203,6 +207,22 @@ var storeCmd = &cobra.Command{
 			dataToStore = models.TextData{
 				Data: encData,
 				Meta: encMeta,
+			}
+
+			dataToLocalStore := models.TextLocalData{
+				Data:      encData,
+				Meta:      encMeta,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+
+			db := openDB()
+			defer db.Close()
+			err = dbconnector.SaveTextData(db, dataToLocalStore)
+
+			if err != nil {
+				fmt.Println("Error save local data", err)
+				os.Exit(1)
 			}
 		case "binary":
 			dataToStore = models.BinaryData{
@@ -806,6 +826,19 @@ func padKeyToBlockSize(key []byte, blockSize int) []byte {
 		key = append(key, 0)
 	}
 	return key[:blockSize]
+}
+
+func openDB() *sql.DB {
+	// Open the database.
+	db, err := sql.Open("sqlite3", "./gophkeeper.db")
+	if err != nil {
+		log.Fatalf("Failed to open database: %v", err)
+		os.Exit(1)
+	}
+
+	// Initialize the database.
+	dbconnector.InitDB(db)
+	return db
 }
 
 func init() {

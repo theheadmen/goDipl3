@@ -53,3 +53,38 @@ type FileData struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+// TextLocalData represents a piece of text data.
+type TextLocalData struct {
+	ID        int       `json:"id"`
+	UUID      int       `json:"uuid"`
+	UserID    int       `json:"user_id"`
+	Data      string    `json:"data"`
+	Meta      string    `json:"meta"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// BinaryLocalData represents a piece of binary data.
+type BinaryLocalData struct {
+	ID        int       `json:"id"`
+	UUID      int       `json:"uuid"`
+	UserID    int       `json:"user_id"`
+	Data      []byte    `json:"data"`
+	Meta      string    `json:"meta"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// BankLocalCard represents a bank card.
+type BankLocalCard struct {
+	ID        int       `json:"id"`
+	UUID      int       `json:"uuid"`
+	UserID    int       `json:"user_id"`
+	Number    string    `json:"number"`
+	Expiry    string    `json:"expiry"`
+	CVV       string    `json:"cvv"`
+	Meta      string    `json:"meta"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
