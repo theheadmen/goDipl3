@@ -75,6 +75,37 @@ func UpdateTextData(db *sql.DB, id int, data models.TextLocalData) error {
 	}
 }
 
+func SaveAndUpdateTextData(db *sql.DB, datas []models.TextLocalData) error {
+	// Запись TextLocalData в локальную БД клиента
+	for _, data := range datas {
+		// Проверка наличия данных в локальной БД
+		var localData models.TextLocalData
+		err := db.QueryRow("SELECT * FROM text_local_data WHERE uuid = ? AND user_id = ?", data.UUID, data.UserID).Scan(
+			&localData.ID, &localData.UUID, &localData.UserID, &localData.Data, &localData.Meta, &localData.CreatedAt, &localData.UpdatedAt)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
+		// Если данные существуют и локальные данные старее, обновляем их
+		if err == nil && localData.UpdatedAt.Before(data.UpdatedAt) {
+			_, err := db.Exec("UPDATE text_local_data SET data = ?, meta = ?, updated_at = ? WHERE uuid = ? AND user_id = ?",
+				data.Data, data.Meta, data.UpdatedAt, data.UUID, data.UserID)
+			if err != nil {
+				return err
+			}
+		} else if err == sql.ErrNoRows {
+			// Если данных нет, вставляем новые данные
+			_, err := db.Exec("INSERT INTO text_local_data (uuid, user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+				data.UUID, data.UserID, data.Data, data.Meta, data.CreatedAt, data.UpdatedAt)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func DeleteTextData(db *sql.DB, id int) error {
 	_, err := db.Exec("DELETE FROM text_local_data WHERE id = ?", id)
 	return err
@@ -126,6 +157,37 @@ func UpdateBinaryData(db *sql.DB, id int, data models.BinaryLocalData) error {
 	} else {
 		return errors.New("data not found")
 	}
+}
+
+func SaveAndUpdateBinaryData(db *sql.DB, datas []models.BinaryLocalData) error {
+	// Запись BinaryLocalData в локальную БД клиента
+	for _, data := range datas {
+		// Проверка наличия данных в локальной БД
+		var localData models.BinaryLocalData
+		err := db.QueryRow("SELECT * FROM binary_local_data WHERE uuid = ? AND user_id = ?", data.UUID, data.UserID).Scan(
+			&localData.ID, &localData.UUID, &localData.UserID, &localData.Data, &localData.Meta, &localData.CreatedAt, &localData.UpdatedAt)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
+		// Если данные существуют и локальные данные старее, обновляем их
+		if err == nil && localData.UpdatedAt.Before(data.UpdatedAt) {
+			_, err := db.Exec("UPDATE binary_local_data SET data = ?, meta = ?, updated_at = ? WHERE uuid = ? AND user_id = ?",
+				data.Data, data.Meta, data.UpdatedAt, data.UUID, data.UserID)
+			if err != nil {
+				return err
+			}
+		} else if err == sql.ErrNoRows {
+			// Если данных нет, вставляем новые данные
+			_, err := db.Exec("INSERT INTO binary_local_data (uuid, user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+				data.UUID, data.UserID, data.Data, data.Meta, data.CreatedAt, data.UpdatedAt)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func DeleteBinaryData(db *sql.DB, id int) error {
@@ -192,6 +254,37 @@ func UpdateBankData(db *sql.DB, id int, data models.BankLocalCard) error {
 	} else {
 		return errors.New("data not found")
 	}
+}
+
+func SaveAndUpdateBankData(db *sql.DB, datas []models.BankLocalCard) error {
+	// Запись BankLocalCard в локальную БД клиента
+	for _, data := range datas {
+		// Проверка наличия данных в локальной БД
+		var localData models.BankLocalCard
+		err := db.QueryRow("SELECT * FROM bank_local_card WHERE uuid = ? AND user_id = ?", data.UUID, data.UserID).Scan(
+			&localData.ID, &localData.UUID, &localData.UserID, &localData.Number, &localData.Expiry, &localData.CVV, &localData.Meta, &localData.CreatedAt, &localData.UpdatedAt)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
+		// Если данные существуют и локальные данные старее, обновляем их
+		if err == nil && localData.UpdatedAt.Before(data.UpdatedAt) {
+			_, err := db.Exec("UPDATE bank_local_card SET number = ?, expiry = ?, cvv = ?, meta = ?, updated_at = ? WHERE uuid = ? AND user_id = ?",
+				data.Number, data.Expiry, data.CVV, data.Meta, data.UpdatedAt, data.UUID, data.UserID)
+			if err != nil {
+				return err
+			}
+		} else if err == sql.ErrNoRows {
+			// Если данных нет, вставляем новые данные
+			_, err := db.Exec("INSERT INTO bank_local_card (uuid, user_id, number, expiry, cvv, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+				data.UUID, data.UserID, data.Number, data.Expiry, data.CVV, data.Meta, data.CreatedAt, data.UpdatedAt)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func DeleteBankData(db *sql.DB, id int) error {

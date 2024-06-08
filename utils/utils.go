@@ -109,3 +109,50 @@ func SendRequest(baseURL *url.URL, body io.Reader, reqType string, contentType s
 
 	return resp, nil
 }
+
+func ConvertTextToLocalData(textData []models.TextData) []models.TextLocalData {
+	var textLocalData []models.TextLocalData
+	for _, data := range textData {
+		textLocalData = append(textLocalData, models.TextLocalData{
+			UUID:      data.ID, // Используем ID в качестве UUID
+			UserID:    data.UserID,
+			Data:      data.Data,
+			Meta:      data.Meta,
+			CreatedAt: data.CreatedAt,
+			UpdatedAt: data.UpdatedAt,
+		})
+	}
+	return textLocalData
+}
+
+func ConvertBinaryToLocalData(binaryData []models.BinaryData) []models.BinaryLocalData {
+	var textBinaryData []models.BinaryLocalData
+	for _, data := range binaryData {
+		textBinaryData = append(textBinaryData, models.BinaryLocalData{
+			UUID:      data.ID, // Используем ID в качестве UUID
+			UserID:    data.UserID,
+			Data:      data.Data,
+			Meta:      data.Meta,
+			CreatedAt: data.CreatedAt,
+			UpdatedAt: data.UpdatedAt,
+		})
+	}
+	return textBinaryData
+}
+
+func ConvertBankToLocalData(bankData []models.BankCard) []models.BankLocalCard {
+	var textBankData []models.BankLocalCard
+	for _, data := range bankData {
+		textBankData = append(textBankData, models.BankLocalCard{
+			UUID:      data.ID, // Используем ID в качестве UUID
+			UserID:    data.UserID,
+			Number:    data.Number,
+			Expiry:    data.Expiry,
+			CVV:       data.CVV,
+			Meta:      data.Meta,
+			CreatedAt: data.CreatedAt,
+			UpdatedAt: data.UpdatedAt,
+		})
+	}
+	return textBankData
+}

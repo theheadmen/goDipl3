@@ -208,22 +208,6 @@ var storeCmd = &cobra.Command{
 				Data: encData,
 				Meta: encMeta,
 			}
-
-			dataToLocalStore := models.TextLocalData{
-				Data:      encData,
-				Meta:      encMeta,
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
-			}
-
-			db := openDB()
-			defer db.Close()
-			err = dbconnector.SaveTextData(db, dataToLocalStore)
-
-			if err != nil {
-				fmt.Println("Error save local data", err)
-				os.Exit(1)
-			}
 		case "binary":
 			dataToStore = models.BinaryData{
 				Data: []byte(data),
@@ -419,6 +403,9 @@ var getCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		db := openDB()
+		defer db.Close()
+
 		switch dataType {
 		case "text":
 			var textData []models.TextData
@@ -443,6 +430,13 @@ var getCmd = &cobra.Command{
 				textData[i].Meta = decrMeta
 			}
 			fmt.Printf("TextData: %+v\n", textData)
+			// переводим данные в локальные и пробуем сохранить
+			dataToLocal := utils.ConvertTextToLocalData(textData)
+			err = dbconnector.SaveAndUpdateTextData(db, dataToLocal)
+
+			if err != nil {
+				fmt.Println("Error save local data:", err)
+			}
 		case "binary":
 			var binaryData []models.BinaryData
 			err = json.Unmarshal(body, &binaryData)
@@ -450,7 +444,23 @@ var getCmd = &cobra.Command{
 				fmt.Println("Error unmarshalling BinaryData:", err)
 				os.Exit(1)
 			}
+			for i := range binaryData {
+				decrMeta, err := Decrypt(key, binaryData[i].Meta)
+				if err != nil {
+					fmt.Println("Error decrypt binaryData.meta:", err)
+					os.Exit(1)
+				}
+				binaryData[i].Meta = decrMeta
+			}
 			fmt.Printf("BinaryData: %+v\n", binaryData)
+
+			// переводим данные в локальные и пробуем сохранить
+			dataToLocal := utils.ConvertBinaryToLocalData(binaryData)
+			err = dbconnector.SaveAndUpdateBinaryData(db, dataToLocal)
+
+			if err != nil {
+				fmt.Println("Error save local data:", err)
+			}
 		case "bankcard":
 			var bankCard []models.BankCard
 			err = json.Unmarshal(body, &bankCard)
@@ -488,6 +498,14 @@ var getCmd = &cobra.Command{
 				bankCard[i].Meta = decrMeta
 			}
 			fmt.Printf("BankCard: %+v\n", bankCard)
+
+			// переводим данные в локальные и пробуем сохранить
+			dataToLocal := utils.ConvertBankToLocalData(bankCard)
+			err = dbconnector.SaveAndUpdateBankData(db, dataToLocal)
+
+			if err != nil {
+				fmt.Println("Error save local data:", err)
+			}
 		default:
 			fmt.Println("Unsupported data type")
 			os.Exit(1)
