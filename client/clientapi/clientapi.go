@@ -367,148 +367,180 @@ var updateCmd = &cobra.Command{
 }
 
 var getCmd = &cobra.Command{
-	Use:   "get TYPE KEY",
+	Use:   "get TYPE KEY [flags]",
 	Short: "Get user data",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		dataType := args[0]
 		key := []byte(args[1])
 
-		// Создаем URL с параметром типа данных
-		baseURL, err := url.Parse("https://localhost:8080/retrieve")
-		if err != nil {
-			fmt.Println("Error parsing URL:", err)
-			os.Exit(1)
-		}
-
-		params := url.Values{}
-		params.Add("type", dataType)
-		baseURL.RawQuery = params.Encode()
-
-		resp, err := utils.SendRequest(baseURL, nil, "GET", "", true, authCookies)
-		if err != nil {
-			fmt.Println("Error sending get request:", err)
-			os.Exit(1)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			fmt.Println("Get failed with status:", resp.Status)
-			os.Exit(1)
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			fmt.Println("Error reading response body:", err)
-			os.Exit(1)
-		}
-
-		db := openDB()
-		defer db.Close()
-
-		switch dataType {
-		case "text":
-			var textData []models.TextData
-			err = json.Unmarshal(body, &textData)
-			if err != nil {
-				fmt.Println("Error unmarshalling TextData:", err)
+		isLocal, _ := cmd.Flags().GetBool("local")
+		if isLocal {
+			db := openDB()
+			defer db.Close()
+			switch dataType {
+			case "text":
+				textData, err := dbconnector.GetAllTextData(db)
+				if err != nil {
+					fmt.Println("Error getting text data:", err)
+					os.Exit(1)
+				}
+				fmt.Printf("TextData: %+v\n", textData)
+			case "binary":
+				binaryData, err := dbconnector.GetAllBinaryData(db)
+				if err != nil {
+					fmt.Println("Error getting binary data:", err)
+					os.Exit(1)
+				}
+				fmt.Printf("BinaryData: %+v\n", binaryData)
+			case "bankcard":
+				bankcardData, err := dbconnector.GetAllBankData(db)
+				if err != nil {
+					fmt.Println("Error getting bankcard:", err)
+					os.Exit(1)
+				}
+				fmt.Printf("BankcardData: %+v\n", bankcardData)
+			default:
+				fmt.Println("Unsupported data type")
 				os.Exit(1)
 			}
-			for i := range textData {
-				decrData, err := Decrypt(key, textData[i].Data)
-				if err != nil {
-					fmt.Println("Error decrypt TextData.data:", err)
-					os.Exit(1)
-				}
-
-				decrMeta, err := Decrypt(key, textData[i].Meta)
-				if err != nil {
-					fmt.Println("Error decrypt TextData.meta:", err)
-					os.Exit(1)
-				}
-				textData[i].Data = decrData
-				textData[i].Meta = decrMeta
-			}
-			fmt.Printf("TextData: %+v\n", textData)
-			// переводим данные в локальные и пробуем сохранить
-			dataToLocal := utils.ConvertTextToLocalData(textData)
-			err = dbconnector.SaveAndUpdateTextData(db, dataToLocal)
-
+		} else {
+			// Создаем URL с параметром типа данных
+			baseURL, err := url.Parse("https://localhost:8080/retrieve")
 			if err != nil {
-				fmt.Println("Error save local data:", err)
-			}
-		case "binary":
-			var binaryData []models.BinaryData
-			err = json.Unmarshal(body, &binaryData)
-			if err != nil {
-				fmt.Println("Error unmarshalling BinaryData:", err)
+				fmt.Println("Error parsing URL:", err)
 				os.Exit(1)
 			}
-			for i := range binaryData {
-				decrMeta, err := Decrypt(key, binaryData[i].Meta)
-				if err != nil {
-					fmt.Println("Error decrypt binaryData.meta:", err)
-					os.Exit(1)
-				}
-				binaryData[i].Meta = decrMeta
-			}
-			fmt.Printf("BinaryData: %+v\n", binaryData)
 
-			// переводим данные в локальные и пробуем сохранить
-			dataToLocal := utils.ConvertBinaryToLocalData(binaryData)
-			err = dbconnector.SaveAndUpdateBinaryData(db, dataToLocal)
+			params := url.Values{}
+			params.Add("type", dataType)
+			baseURL.RawQuery = params.Encode()
 
+			resp, err := utils.SendRequest(baseURL, nil, "GET", "", true, authCookies)
 			if err != nil {
-				fmt.Println("Error save local data:", err)
-			}
-		case "bankcard":
-			var bankCard []models.BankCard
-			err = json.Unmarshal(body, &bankCard)
-			if err != nil {
-				fmt.Println("Error unmarshalling BankCard:", err)
+				fmt.Println("Error sending get request:", err)
 				os.Exit(1)
 			}
-			for i := range bankCard {
-				decrNumber, err := Decrypt(key, bankCard[i].Number)
-				if err != nil {
-					fmt.Println("Error decrypt bankCard.Number:", err)
-					os.Exit(1)
-				}
+			defer resp.Body.Close()
 
-				decrExpiry, err := Decrypt(key, bankCard[i].Expiry)
-				if err != nil {
-					fmt.Println("Error decrypt bankCard.Expiry:", err)
-					os.Exit(1)
-				}
-
-				decrCVV, err := Decrypt(key, bankCard[i].CVV)
-				if err != nil {
-					fmt.Println("Error decrypt bankCard.CVV:", err)
-					os.Exit(1)
-				}
-
-				decrMeta, err := Decrypt(key, bankCard[i].Meta)
-				if err != nil {
-					fmt.Println("Error decrypt bankCard.meta:", err)
-					os.Exit(1)
-				}
-				bankCard[i].Number = decrNumber
-				bankCard[i].Expiry = decrExpiry
-				bankCard[i].CVV = decrCVV
-				bankCard[i].Meta = decrMeta
+			if resp.StatusCode != http.StatusOK {
+				fmt.Println("Get failed with status:", resp.Status)
+				os.Exit(1)
 			}
-			fmt.Printf("BankCard: %+v\n", bankCard)
 
-			// переводим данные в локальные и пробуем сохранить
-			dataToLocal := utils.ConvertBankToLocalData(bankCard)
-			err = dbconnector.SaveAndUpdateBankData(db, dataToLocal)
-
+			body, err := io.ReadAll(resp.Body)
 			if err != nil {
-				fmt.Println("Error save local data:", err)
+				fmt.Println("Error reading response body:", err)
+				os.Exit(1)
 			}
-		default:
-			fmt.Println("Unsupported data type")
-			os.Exit(1)
+
+			db := openDB()
+			defer db.Close()
+
+			switch dataType {
+			case "text":
+				var textData []models.TextData
+				err = json.Unmarshal(body, &textData)
+				if err != nil {
+					fmt.Println("Error unmarshalling TextData:", err)
+					os.Exit(1)
+				}
+				for i := range textData {
+					decrData, err := Decrypt(key, textData[i].Data)
+					if err != nil {
+						fmt.Println("Error decrypt TextData.data:", err)
+						os.Exit(1)
+					}
+
+					decrMeta, err := Decrypt(key, textData[i].Meta)
+					if err != nil {
+						fmt.Println("Error decrypt TextData.meta:", err)
+						os.Exit(1)
+					}
+					textData[i].Data = decrData
+					textData[i].Meta = decrMeta
+				}
+				fmt.Printf("TextData: %+v\n", textData)
+				// переводим данные в локальные и пробуем сохранить
+				dataToLocal := utils.ConvertTextToLocalData(textData)
+				err = dbconnector.SaveAndUpdateTextData(db, dataToLocal)
+
+				if err != nil {
+					fmt.Println("Error save local data:", err)
+				}
+			case "binary":
+				var binaryData []models.BinaryData
+				err = json.Unmarshal(body, &binaryData)
+				if err != nil {
+					fmt.Println("Error unmarshalling BinaryData:", err)
+					os.Exit(1)
+				}
+				for i := range binaryData {
+					decrMeta, err := Decrypt(key, binaryData[i].Meta)
+					if err != nil {
+						fmt.Println("Error decrypt binaryData.meta:", err)
+						os.Exit(1)
+					}
+					binaryData[i].Meta = decrMeta
+				}
+				fmt.Printf("BinaryData: %+v\n", binaryData)
+
+				// переводим данные в локальные и пробуем сохранить
+				dataToLocal := utils.ConvertBinaryToLocalData(binaryData)
+				err = dbconnector.SaveAndUpdateBinaryData(db, dataToLocal)
+
+				if err != nil {
+					fmt.Println("Error save local data:", err)
+				}
+			case "bankcard":
+				var bankCard []models.BankCard
+				err = json.Unmarshal(body, &bankCard)
+				if err != nil {
+					fmt.Println("Error unmarshalling BankCard:", err)
+					os.Exit(1)
+				}
+				for i := range bankCard {
+					decrNumber, err := Decrypt(key, bankCard[i].Number)
+					if err != nil {
+						fmt.Println("Error decrypt bankCard.Number:", err)
+						os.Exit(1)
+					}
+
+					decrExpiry, err := Decrypt(key, bankCard[i].Expiry)
+					if err != nil {
+						fmt.Println("Error decrypt bankCard.Expiry:", err)
+						os.Exit(1)
+					}
+
+					decrCVV, err := Decrypt(key, bankCard[i].CVV)
+					if err != nil {
+						fmt.Println("Error decrypt bankCard.CVV:", err)
+						os.Exit(1)
+					}
+
+					decrMeta, err := Decrypt(key, bankCard[i].Meta)
+					if err != nil {
+						fmt.Println("Error decrypt bankCard.meta:", err)
+						os.Exit(1)
+					}
+					bankCard[i].Number = decrNumber
+					bankCard[i].Expiry = decrExpiry
+					bankCard[i].CVV = decrCVV
+					bankCard[i].Meta = decrMeta
+				}
+				fmt.Printf("BankCard: %+v\n", bankCard)
+
+				// переводим данные в локальные и пробуем сохранить
+				dataToLocal := utils.ConvertBankToLocalData(bankCard)
+				err = dbconnector.SaveAndUpdateBankData(db, dataToLocal)
+
+				if err != nil {
+					fmt.Println("Error save local data:", err)
+				}
+			default:
+				fmt.Println("Unsupported data type")
+				os.Exit(1)
+			}
 		}
 	},
 }
@@ -778,6 +810,98 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+var syncFromServerCmd = &cobra.Command{
+	Use:   "syncfrom KEY",
+	Short: "Sync local data with data on server",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		key := args[0]
+		// Вызов команды get с аргументами
+		getCmdArgs := []string{"text", key}
+		getCmd.Run(getCmd, getCmdArgs)
+		getCmdArgs = []string{"binary", key}
+		getCmd.Run(getCmd, getCmdArgs)
+		getCmdArgs = []string{"bankcard", key}
+		getCmd.Run(getCmd, getCmdArgs)
+	},
+}
+
+var syncToServerCmd = &cobra.Command{
+	Use:   "syncto",
+	Short: "Sync server data with local data",
+	Args:  cobra.ExactArgs(0),
+	Run: func(cmd *cobra.Command, args []string) {
+		db := openDB()
+		defer db.Close()
+
+		textData, err := dbconnector.GetAllTextData(db)
+		if err != nil {
+			fmt.Println("Error getting text data:", err)
+			os.Exit(1)
+		}
+		dataJson, err := json.Marshal(textData)
+		if err != nil {
+			fmt.Println("Error marshalling data:", err)
+			os.Exit(1)
+		}
+		dataType := "text"
+		SendDataToSync(dataJson, dataType)
+
+		binaryData, err := dbconnector.GetAllBinaryData(db)
+		if err != nil {
+			fmt.Println("Error getting binary data:", err)
+			os.Exit(1)
+		}
+		dataJson, err = json.Marshal(binaryData)
+		if err != nil {
+			fmt.Println("Error marshalling data:", err)
+			os.Exit(1)
+		}
+		dataType = "binary"
+		SendDataToSync(dataJson, dataType)
+
+		bankData, err := dbconnector.GetAllBankData(db)
+		if err != nil {
+			fmt.Println("Error getting bank data:", err)
+			os.Exit(1)
+		}
+		dataJson, err = json.Marshal(bankData)
+		if err != nil {
+			fmt.Println("Error marshalling data:", err)
+			os.Exit(1)
+		}
+		dataType = "bankcard"
+		SendDataToSync(dataJson, dataType)
+
+		fmt.Println("Data synced successfully.")
+	},
+}
+
+func SendDataToSync(dataJson []byte, dataType string) {
+	// Создаем URL с параметром типа данных
+	baseURL, err := url.Parse("https://localhost:8080/sync")
+	if err != nil {
+		fmt.Println("Error parsing URL:", err)
+		os.Exit(1)
+	}
+
+	params := url.Values{}
+	params.Add("type", dataType)
+	baseURL.RawQuery = params.Encode()
+
+	resp, err := utils.SendRequest(baseURL, bytes.NewBuffer(dataJson), "POST", "application/json", true, authCookies)
+	if err != nil {
+		fmt.Println("Error sending sync request:", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println("sync failed with status:", resp.Status)
+		os.Exit(1)
+	}
+}
+
 // Encrypt encrypts a string using a key of any length
 func Encrypt(key []byte, text string) (string, error) {
 	plaintext := []byte(text)
@@ -872,6 +996,7 @@ func init() {
 	storeCmd.Flags().StringP("expiry", "e", "", "Expiry date for the card")
 	storeCmd.Flags().StringP("cvv", "c", "", "CVV code for the card")
 	RootCmd.AddCommand(storeCmd)
+	getCmd.Flags().BoolP("local", "l", false, "Get data from local server")
 	RootCmd.AddCommand(getCmd)
 	RootCmd.AddCommand(versionCmd)
 	RootCmd.AddCommand(deleteCmd)
@@ -883,4 +1008,6 @@ func init() {
 	RootCmd.AddCommand(listFilesCmd)
 	RootCmd.AddCommand(getFileCmd)
 	RootCmd.AddCommand(deleteFileCmd)
+	RootCmd.AddCommand(syncFromServerCmd)
+	RootCmd.AddCommand(syncToServerCmd)
 }

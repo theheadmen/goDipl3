@@ -28,6 +28,7 @@ func main() {
 	r.HandleFunc("/register", server.RegisterHandler)
 	r.HandleFunc("/login", server.LoginHandler)
 	r.HandleFunc("/store", server.StoreHandler)
+	r.HandleFunc("/sync", server.SyncHandler)
 	r.HandleFunc("/retrieve", server.RetrieveHandler)
 	r.HandleFunc("/delete", server.DeleteHandler)
 	r.HandleFunc("/update", server.UpdateHandler)

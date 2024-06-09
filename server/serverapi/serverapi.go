@@ -227,6 +227,82 @@ func (s *Server) StoreHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Data stored successfully")
 }
 
+// SyncHandler handles save and update of user data.
+func (s *Server) SyncHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("Sync query")
+
+	// Parse the request body.
+	var dataArray []map[string]interface{}
+	err := json.NewDecoder(r.Body).Decode(&dataArray)
+	if err != nil {
+		log.Println("can't decode body for store multiple")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Get the data type.
+	dataType := r.URL.Query().Get("type")
+
+	// Get the user ID from the JWT token.
+	userID, err := getUserIDFromToken(r)
+	if err != nil {
+		log.Println("getUserIDFromToken error: ", err.Error())
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	log.Println("sync", dataType, "for", userID)
+
+	// Convert the data array to the appropriate type.
+	switch dataType {
+	case "text":
+		var textDataArray []models.TextData
+		for _, data := range dataArray {
+			textData, cerr := utils.CreateTextData(userID, data)
+			if cerr != nil {
+				http.Error(w, cerr.Error(), http.StatusBadRequest)
+				return
+			}
+			textDataArray = append(textDataArray, textData)
+		}
+		err = dbconnector.SaveAndUpdateTextData(textDataArray, s.db)
+	case "binary":
+		var binaryDataArray []models.BinaryData
+		for _, data := range dataArray {
+			binaryData, cerr := utils.CreateBinaryData(userID, data)
+			if cerr != nil {
+				http.Error(w, cerr.Error(), http.StatusBadRequest)
+				return
+			}
+			binaryDataArray = append(binaryDataArray, binaryData)
+		}
+		err = dbconnector.SaveAndUpdateBinaryData(binaryDataArray, s.db)
+	case "bankcard":
+		var bankCardArray []models.BankCard
+		for _, data := range dataArray {
+			bankCard, cerr := utils.CreateBankCard(userID, data)
+			if cerr != nil {
+				http.Error(w, cerr.Error(), http.StatusBadRequest)
+				return
+			}
+			bankCardArray = append(bankCardArray, bankCard)
+		}
+		err = dbconnector.SaveAndUpdateBankData(bankCardArray, s.db)
+	default:
+		log.Println("invalid data type: ", dataType)
+		http.Error(w, "Invalid data type", http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Data synced successfully")
+}
+
 // getUserIDFromToken retrieves the user ID from the JWT token in the request.
 func getUserIDFromToken(r *http.Request) (int, error) {
 	c, err := r.Cookie("token")

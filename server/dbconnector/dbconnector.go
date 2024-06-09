@@ -134,6 +134,174 @@ func StoreBankCard(bankCard models.BankCard, db *sql.DB) error {
 	return err
 }
 
+func SaveAndUpdateTextData(datas []models.TextData, db *sql.DB) error {
+	for _, data := range datas {
+		// Проверка наличия данных в БД
+		var localData models.TextData
+		err := db.QueryRow("SELECT * FROM text_data WHERE id = ? AND user_id = ?", data.ID, data.UserID).Scan(
+			&localData.ID, &localData.UserID, &localData.Data, &localData.Meta, &localData.CreatedAt, &localData.UpdatedAt)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
+		// Если данные существуют и локальные данные старее, обновляем их
+		if err == nil && localData.UpdatedAt.Before(data.UpdatedAt) {
+			_, err := db.Exec("UPDATE text_data SET data = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+				data.Data, data.Meta, data.UpdatedAt, data.ID, data.UserID)
+			if err != nil {
+				return err
+			}
+		} else if err == sql.ErrNoRows {
+			// Если данных нет, вставляем новые данные
+			_, err := db.Exec("INSERT INTO text_data (user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+				data.UserID, data.Data, data.Meta, data.CreatedAt, data.UpdatedAt)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func SaveAndUpdateBinaryData(datas []models.BinaryData, db *sql.DB) error {
+	for _, data := range datas {
+		// Проверка наличия данных в локальной БД
+		var localData models.BinaryData
+		err := db.QueryRow("SELECT * FROM binary_data WHERE id = ? AND user_id = ?", data.ID, data.UserID).Scan(
+			&localData.ID, &localData.UserID, &localData.Data, &localData.Meta, &localData.CreatedAt, &localData.UpdatedAt)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
+		// Если данные существуют и локальные данные старее, обновляем их
+		if err == nil && localData.UpdatedAt.Before(data.UpdatedAt) {
+			_, err := db.Exec("UPDATE binary_data SET data = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+				data.Data, data.Meta, data.UpdatedAt, data.ID, data.UserID)
+			if err != nil {
+				return err
+			}
+		} else if err == sql.ErrNoRows {
+			// Если данных нет, вставляем новые данные
+			_, err := db.Exec("INSERT INTO binary_data (user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+				data.UserID, data.Data, data.Meta, data.CreatedAt, data.UpdatedAt)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func SaveAndUpdateBankData(datas []models.BankCard, db *sql.DB) error {
+	for _, data := range datas {
+		// Проверка наличия данных в локальной БД
+		var localData models.BankCard
+		err := db.QueryRow("SELECT * FROM bank_cards WHERE id = ? AND user_id = ?", data.ID, data.UserID).Scan(
+			&localData.ID, &localData.UserID, &localData.Number, &localData.Expiry, &localData.CVV, &localData.Meta, &localData.CreatedAt, &localData.UpdatedAt)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+
+		// Если данные существуют и локальные данные старее, обновляем их
+		if err == nil && localData.UpdatedAt.Before(data.UpdatedAt) {
+			_, err := db.Exec("UPDATE bank_cards SET number = ?, expiry = ?, cvv = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+				data.Number, data.Expiry, data.CVV, data.Meta, data.UpdatedAt, data.ID, data.UserID)
+			if err != nil {
+				return err
+			}
+		} else if err == sql.ErrNoRows {
+			// Если данных нет, вставляем новые данные
+			_, err := db.Exec("INSERT INTO bank_cards (user_id, number, expiry, cvv, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+				data.UserID, data.Number, data.Expiry, data.CVV, data.Meta, data.CreatedAt, data.UpdatedAt)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// storeTextDataArray stores an array of text data for the given user.
+func StoreTextDataArray(textDataArray []models.TextData, db *sql.DB) error {
+	log.Println("store text array", textDataArray)
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare("INSERT INTO text_data (user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_id, id) DO UPDATE SET data = ?, meta = ?, updated_at = ?")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, textData := range textDataArray {
+		_, err = stmt.Exec(textData.UserID, textData.Data, textData.Meta, textData.CreatedAt, textData.UpdatedAt, textData.Data, textData.Meta, textData.UpdatedAt)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// storeBinaryDataArray stores an array of binary data for the given user.
+func StoreBinaryDataArray(binaryDataArray []models.BinaryData, db *sql.DB) error {
+	log.Println("store binary array", binaryDataArray)
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare("INSERT INTO binary_data (user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, binaryData := range binaryDataArray {
+		_, err = stmt.Exec(binaryData.UserID, binaryData.Data, binaryData.Meta, binaryData.CreatedAt, binaryData.UpdatedAt)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// storeBankCardArray stores an array of bank card data for the given user.
+func StoreBankCardArray(bankCardArray []models.BankCard, db *sql.DB) error {
+	log.Println("store bank card array", bankCardArray)
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare("INSERT INTO bank_cards (user_id, number, expiry, cvv, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, bankCard := range bankCardArray {
+		_, err = stmt.Exec(bankCard.UserID, bankCard.Number, bankCard.Expiry, bankCard.CVV, bankCard.Meta, bankCard.CreatedAt, bankCard.UpdatedAt)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
 // retrieveTextData retrieves text data for the given user.
 func RetrieveTextData(userID int, db *sql.DB) ([]models.TextData, error) {
 	rows, err := db.Query("SELECT id, user_id, data, meta, created_at, updated_at FROM text_data WHERE user_id = ?", userID)
