@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"log"
+	"os"
 
 	"github.com/theheadmen/goDipl3/models"
 )
@@ -45,6 +46,19 @@ func InitDB(db *sql.DB) {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func OpenDB() *sql.DB {
+	// Open the database.
+	db, err := sql.Open("sqlite3", "./gophkeeper.db")
+	if err != nil {
+		log.Fatalf("Failed to open database: %v", err)
+		os.Exit(1)
+	}
+
+	// Initialize the database.
+	InitDB(db)
+	return db
 }
 
 func SaveTextData(db *sql.DB, data models.TextLocalData) error {

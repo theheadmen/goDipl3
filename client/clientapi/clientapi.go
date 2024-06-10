@@ -3,15 +3,9 @@ package clientapi
 import (
 	"bufio"
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -189,15 +183,15 @@ var storeCmd = &cobra.Command{
 		expiry, _ := cmd.Flags().GetString("expiry")
 		cvv, _ := cmd.Flags().GetString("cvv")
 
-		encData, err := Encrypt(key, data)
+		encData, err := utils.Encrypt(key, data)
 		if err != nil {
-			fmt.Println("Error encrypting data:", err)
+			fmt.Println("Error utils.Encrypting data:", err)
 			os.Exit(1)
 		}
 
-		encMeta, err := Encrypt(key, meta)
+		encMeta, err := utils.Encrypt(key, meta)
 		if err != nil {
-			fmt.Println("Error encrypting meta:", err)
+			fmt.Println("Error utils.Encrypting meta:", err)
 			os.Exit(1)
 		}
 
@@ -210,19 +204,19 @@ var storeCmd = &cobra.Command{
 			}
 		case "binary":
 			dataToStore = models.BinaryData{
-				Data: []byte(data),
+				Data: []byte(encData),
 				Meta: encMeta,
 			}
 		case "bankcard":
-			encExpiry, err := Encrypt(key, expiry)
+			encExpiry, err := utils.Encrypt(key, expiry)
 			if err != nil {
-				fmt.Println("Error encrypting expiry:", err)
+				fmt.Println("Error utils.Encrypting expiry:", err)
 				os.Exit(1)
 			}
 
-			encCVV, err := Encrypt(key, cvv)
+			encCVV, err := utils.Encrypt(key, cvv)
 			if err != nil {
-				fmt.Println("Error encrypting cvv:", err)
+				fmt.Println("Error utils.Encrypting cvv:", err)
 				os.Exit(1)
 			}
 
@@ -284,15 +278,15 @@ var updateCmd = &cobra.Command{
 		expiry, _ := cmd.Flags().GetString("expiry")
 		cvv, _ := cmd.Flags().GetString("cvv")
 
-		encData, err := Encrypt(key, data)
+		encData, err := utils.Encrypt(key, data)
 		if err != nil {
-			fmt.Println("Error encrypting data:", err)
+			fmt.Println("Error utils.Encrypting data:", err)
 			os.Exit(1)
 		}
 
-		encMeta, err := Encrypt(key, meta)
+		encMeta, err := utils.Encrypt(key, meta)
 		if err != nil {
-			fmt.Println("Error encrypting meta:", err)
+			fmt.Println("Error utils.Encrypting meta:", err)
 			os.Exit(1)
 		}
 
@@ -309,15 +303,15 @@ var updateCmd = &cobra.Command{
 				Meta: encMeta,
 			}
 		case "bankcard":
-			encExpiry, err := Encrypt(key, expiry)
+			encExpiry, err := utils.Encrypt(key, expiry)
 			if err != nil {
-				fmt.Println("Error encrypting expiry:", err)
+				fmt.Println("Error utils.Encrypting expiry:", err)
 				os.Exit(1)
 			}
 
-			encCVV, err := Encrypt(key, cvv)
+			encCVV, err := utils.Encrypt(key, cvv)
 			if err != nil {
-				fmt.Println("Error encrypting cvv:", err)
+				fmt.Println("Error utils.Encrypting cvv:", err)
 				os.Exit(1)
 			}
 
@@ -376,30 +370,52 @@ var getCmd = &cobra.Command{
 
 		isLocal, _ := cmd.Flags().GetBool("local")
 		if isLocal {
-			db := openDB()
+			db := dbconnector.OpenDB()
 			defer db.Close()
 			switch dataType {
 			case "text":
-				textData, err := dbconnector.GetAllTextData(db)
+				textLocalData, err := dbconnector.GetAllTextData(db)
 				if err != nil {
 					fmt.Println("Error getting text data:", err)
 					os.Exit(1)
 				}
+				textData := utils.ConvertLocalToTextData(textLocalData)
+				// а затем дешифруем чтобы показать
+				err = utils.DecryptTextData(textData, key)
+				if err != nil {
+					fmt.Println("Error decrypt:", err)
+					os.Exit(1)
+				}
 				fmt.Printf("TextData: %+v\n", textData)
 			case "binary":
-				binaryData, err := dbconnector.GetAllBinaryData(db)
+				binaryLocalData, err := dbconnector.GetAllBinaryData(db)
 				if err != nil {
 					fmt.Println("Error getting binary data:", err)
 					os.Exit(1)
 				}
+				binaryData := utils.ConvertLocalToBinaryData(binaryLocalData)
+				// а затем дешифруем чтобы показать
+				err = utils.DecryptBinaryData(binaryData, key)
+				if err != nil {
+					fmt.Println("Error decrypt:", err)
+					os.Exit(1)
+				}
 				fmt.Printf("BinaryData: %+v\n", binaryData)
 			case "bankcard":
-				bankcardData, err := dbconnector.GetAllBankData(db)
+				bankLocalCard, err := dbconnector.GetAllBankData(db)
 				if err != nil {
 					fmt.Println("Error getting bankcard:", err)
 					os.Exit(1)
 				}
-				fmt.Printf("BankcardData: %+v\n", bankcardData)
+
+				bankCard := utils.ConvertLocalToBankData(bankLocalCard)
+				// а затем дешифруем чтобы показать
+				err = utils.DecryptBankData(bankCard, key)
+				if err != nil {
+					fmt.Println("Error decrypt:", err)
+					os.Exit(1)
+				}
+				fmt.Printf("BankcardData: %+v\n", bankCard)
 			default:
 				fmt.Println("Unsupported data type")
 				os.Exit(1)
@@ -434,7 +450,7 @@ var getCmd = &cobra.Command{
 				os.Exit(1)
 			}
 
-			db := openDB()
+			db := dbconnector.OpenDB()
 			defer db.Close()
 
 			switch dataType {
@@ -445,29 +461,19 @@ var getCmd = &cobra.Command{
 					fmt.Println("Error unmarshalling TextData:", err)
 					os.Exit(1)
 				}
-				for i := range textData {
-					decrData, err := Decrypt(key, textData[i].Data)
-					if err != nil {
-						fmt.Println("Error decrypt TextData.data:", err)
-						os.Exit(1)
-					}
-
-					decrMeta, err := Decrypt(key, textData[i].Meta)
-					if err != nil {
-						fmt.Println("Error decrypt TextData.meta:", err)
-						os.Exit(1)
-					}
-					textData[i].Data = decrData
-					textData[i].Meta = decrMeta
-				}
-				fmt.Printf("TextData: %+v\n", textData)
 				// переводим данные в локальные и пробуем сохранить
 				dataToLocal := utils.ConvertTextToLocalData(textData)
 				err = dbconnector.SaveAndUpdateTextData(db, dataToLocal)
-
 				if err != nil {
 					fmt.Println("Error save local data:", err)
 				}
+				// а затем дешифруем чтобы показать
+				err = utils.DecryptTextData(textData, key)
+				if err != nil {
+					fmt.Println("Error decrypt:", err)
+					os.Exit(1)
+				}
+				fmt.Printf("TextData: %+v\n", textData)
 			case "binary":
 				var binaryData []models.BinaryData
 				err = json.Unmarshal(body, &binaryData)
@@ -475,15 +481,6 @@ var getCmd = &cobra.Command{
 					fmt.Println("Error unmarshalling BinaryData:", err)
 					os.Exit(1)
 				}
-				for i := range binaryData {
-					decrMeta, err := Decrypt(key, binaryData[i].Meta)
-					if err != nil {
-						fmt.Println("Error decrypt binaryData.meta:", err)
-						os.Exit(1)
-					}
-					binaryData[i].Meta = decrMeta
-				}
-				fmt.Printf("BinaryData: %+v\n", binaryData)
 
 				// переводим данные в локальные и пробуем сохранить
 				dataToLocal := utils.ConvertBinaryToLocalData(binaryData)
@@ -492,6 +489,13 @@ var getCmd = &cobra.Command{
 				if err != nil {
 					fmt.Println("Error save local data:", err)
 				}
+				// а затем дешифруем чтобы показать
+				err = utils.DecryptBinaryData(binaryData, key)
+				if err != nil {
+					fmt.Println("Error decrypt:", err)
+					os.Exit(1)
+				}
+				fmt.Printf("BinaryData: %+v\n", binaryData)
 			case "bankcard":
 				var bankCard []models.BankCard
 				err = json.Unmarshal(body, &bankCard)
@@ -499,37 +503,6 @@ var getCmd = &cobra.Command{
 					fmt.Println("Error unmarshalling BankCard:", err)
 					os.Exit(1)
 				}
-				for i := range bankCard {
-					decrNumber, err := Decrypt(key, bankCard[i].Number)
-					if err != nil {
-						fmt.Println("Error decrypt bankCard.Number:", err)
-						os.Exit(1)
-					}
-
-					decrExpiry, err := Decrypt(key, bankCard[i].Expiry)
-					if err != nil {
-						fmt.Println("Error decrypt bankCard.Expiry:", err)
-						os.Exit(1)
-					}
-
-					decrCVV, err := Decrypt(key, bankCard[i].CVV)
-					if err != nil {
-						fmt.Println("Error decrypt bankCard.CVV:", err)
-						os.Exit(1)
-					}
-
-					decrMeta, err := Decrypt(key, bankCard[i].Meta)
-					if err != nil {
-						fmt.Println("Error decrypt bankCard.meta:", err)
-						os.Exit(1)
-					}
-					bankCard[i].Number = decrNumber
-					bankCard[i].Expiry = decrExpiry
-					bankCard[i].CVV = decrCVV
-					bankCard[i].Meta = decrMeta
-				}
-				fmt.Printf("BankCard: %+v\n", bankCard)
-
 				// переводим данные в локальные и пробуем сохранить
 				dataToLocal := utils.ConvertBankToLocalData(bankCard)
 				err = dbconnector.SaveAndUpdateBankData(db, dataToLocal)
@@ -537,6 +510,13 @@ var getCmd = &cobra.Command{
 				if err != nil {
 					fmt.Println("Error save local data:", err)
 				}
+				// а затем дешифруем чтобы показать
+				err = utils.DecryptBankData(bankCard, key)
+				if err != nil {
+					fmt.Println("Error decrypt:", err)
+					os.Exit(1)
+				}
+				fmt.Printf("BankCard: %+v\n", bankCard)
 			default:
 				fmt.Println("Unsupported data type")
 				os.Exit(1)
@@ -612,7 +592,7 @@ func StoreFile(filePath string, key []byte) error {
 	}
 
 	// Шифруем содержимое файла
-	encryptedContent, err := Encrypt(key, string(fileContent))
+	encryptedContent, err := utils.Encrypt(key, string(fileContent))
 	if err != nil {
 		return err
 	}
@@ -749,9 +729,9 @@ var getFileCmd = &cobra.Command{
 		}
 
 		// Расшифровываем полученные данные
-		decryptedData, err := Decrypt(key, string(body))
+		decryptedData, err := utils.Decrypt(key, string(body))
 		if err != nil {
-			fmt.Println("Error decrypting data:", err)
+			fmt.Println("Error utils.Decrypting data:", err)
 			os.Exit(1)
 		}
 
@@ -831,14 +811,15 @@ var syncToServerCmd = &cobra.Command{
 	Short: "Sync server data with local data",
 	Args:  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		db := openDB()
+		db := dbconnector.OpenDB()
 		defer db.Close()
 
-		textData, err := dbconnector.GetAllTextData(db)
+		textLocalData, err := dbconnector.GetAllTextData(db)
 		if err != nil {
 			fmt.Println("Error getting text data:", err)
 			os.Exit(1)
 		}
+		textData := utils.ConvertLocalToTextData(textLocalData)
 		dataJson, err := json.Marshal(textData)
 		if err != nil {
 			fmt.Println("Error marshalling data:", err)
@@ -847,11 +828,12 @@ var syncToServerCmd = &cobra.Command{
 		dataType := "text"
 		SendDataToSync(dataJson, dataType)
 
-		binaryData, err := dbconnector.GetAllBinaryData(db)
+		binaryLocalData, err := dbconnector.GetAllBinaryData(db)
 		if err != nil {
 			fmt.Println("Error getting binary data:", err)
 			os.Exit(1)
 		}
+		binaryData := utils.ConvertLocalToBinaryData(binaryLocalData)
 		dataJson, err = json.Marshal(binaryData)
 		if err != nil {
 			fmt.Println("Error marshalling data:", err)
@@ -860,11 +842,12 @@ var syncToServerCmd = &cobra.Command{
 		dataType = "binary"
 		SendDataToSync(dataJson, dataType)
 
-		bankData, err := dbconnector.GetAllBankData(db)
+		bankLocalData, err := dbconnector.GetAllBankData(db)
 		if err != nil {
 			fmt.Println("Error getting bank data:", err)
 			os.Exit(1)
 		}
+		bankData := utils.ConvertLocalToBankData(bankLocalData)
 		dataJson, err = json.Marshal(bankData)
 		if err != nil {
 			fmt.Println("Error marshalling data:", err)
@@ -900,87 +883,6 @@ func SendDataToSync(dataJson []byte, dataType string) {
 		fmt.Println("sync failed with status:", resp.Status)
 		os.Exit(1)
 	}
-}
-
-// Encrypt encrypts a string using a key of any length
-func Encrypt(key []byte, text string) (string, error) {
-	plaintext := []byte(text)
-
-	// Pad key to block size
-	key = padKeyToBlockSize(key, aes.BlockSize)
-
-	// Create a new AES cipher using the key
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-
-	// Create a new Counter Mode block cipher
-	iv := make([]byte, aes.BlockSize)
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		return "", err
-	}
-
-	stream := cipher.NewCTR(block, iv)
-	ciphertext := make([]byte, len(plaintext))
-	stream.XORKeyStream(ciphertext, plaintext)
-
-	// Prepend the IV to the ciphertext
-	ciphertextWithIV := append(iv, ciphertext...)
-
-	return hex.EncodeToString(ciphertextWithIV), nil
-}
-
-// Decrypt decrypts a string using a key of any length
-func Decrypt(key []byte, cryptoText string) (string, error) {
-	ciphertextWithIV, err := hex.DecodeString(cryptoText)
-	if err != nil {
-		return "", err
-	}
-
-	// Pad key to block size
-	key = padKeyToBlockSize(key, aes.BlockSize)
-
-	// Create a new AES cipher using the key
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-
-	// Extract the IV from the ciphertext
-	if len(ciphertextWithIV) < aes.BlockSize {
-		return "", fmt.Errorf("ciphertext too short")
-	}
-	iv := ciphertextWithIV[:aes.BlockSize]
-	ciphertext := ciphertextWithIV[aes.BlockSize:]
-
-	// Create a new Counter Mode block cipher
-	stream := cipher.NewCTR(block, iv)
-	plaintext := make([]byte, len(ciphertext))
-	stream.XORKeyStream(plaintext, ciphertext)
-
-	return string(plaintext), nil
-}
-
-// padKeyToBlockSize pads the key to the block size if it's shorter
-func padKeyToBlockSize(key []byte, blockSize int) []byte {
-	for len(key) < blockSize {
-		key = append(key, 0)
-	}
-	return key[:blockSize]
-}
-
-func openDB() *sql.DB {
-	// Open the database.
-	db, err := sql.Open("sqlite3", "./gophkeeper.db")
-	if err != nil {
-		log.Fatalf("Failed to open database: %v", err)
-		os.Exit(1)
-	}
-
-	// Initialize the database.
-	dbconnector.InitDB(db)
-	return db
 }
 
 func init() {

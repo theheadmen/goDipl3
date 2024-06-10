@@ -230,16 +230,6 @@ func (s *Server) StoreHandler(w http.ResponseWriter, r *http.Request) {
 // SyncHandler handles save and update of user data.
 func (s *Server) SyncHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Sync query")
-
-	// Parse the request body.
-	var dataArray []map[string]interface{}
-	err := json.NewDecoder(r.Body).Decode(&dataArray)
-	if err != nil {
-		log.Println("can't decode body for store multiple")
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	// Get the data type.
 	dataType := r.URL.Query().Get("type")
 
@@ -257,35 +247,29 @@ func (s *Server) SyncHandler(w http.ResponseWriter, r *http.Request) {
 	switch dataType {
 	case "text":
 		var textDataArray []models.TextData
-		for _, data := range dataArray {
-			textData, cerr := utils.CreateTextData(userID, data)
-			if cerr != nil {
-				http.Error(w, cerr.Error(), http.StatusBadRequest)
-				return
-			}
-			textDataArray = append(textDataArray, textData)
+		err = json.NewDecoder(r.Body).Decode(&textDataArray)
+		if err != nil {
+			log.Println("can't decode body for store multiple")
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 		err = dbconnector.SaveAndUpdateTextData(textDataArray, s.db)
 	case "binary":
 		var binaryDataArray []models.BinaryData
-		for _, data := range dataArray {
-			binaryData, cerr := utils.CreateBinaryData(userID, data)
-			if cerr != nil {
-				http.Error(w, cerr.Error(), http.StatusBadRequest)
-				return
-			}
-			binaryDataArray = append(binaryDataArray, binaryData)
+		err = json.NewDecoder(r.Body).Decode(&binaryDataArray)
+		if err != nil {
+			log.Println("can't decode body for store multiple")
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 		err = dbconnector.SaveAndUpdateBinaryData(binaryDataArray, s.db)
 	case "bankcard":
 		var bankCardArray []models.BankCard
-		for _, data := range dataArray {
-			bankCard, cerr := utils.CreateBankCard(userID, data)
-			if cerr != nil {
-				http.Error(w, cerr.Error(), http.StatusBadRequest)
-				return
-			}
-			bankCardArray = append(bankCardArray, bankCard)
+		err = json.NewDecoder(r.Body).Decode(&bankCardArray)
+		if err != nil {
+			log.Println("can't decode body for store multiple")
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 		err = dbconnector.SaveAndUpdateBankData(bankCardArray, s.db)
 	default:
@@ -295,6 +279,7 @@ func (s *Server) SyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
+		log.Println("sync error: ", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
