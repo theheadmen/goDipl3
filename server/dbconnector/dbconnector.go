@@ -143,6 +143,7 @@ func (dbconn DBConnector) StoreBankCard(bankCard models.BankCard) error {
 	return err
 }
 
+// SaveAndUpdateTextData update data if it already exists, or add if it new.
 func (dbconn DBConnector) SaveAndUpdateTextData(datas []models.TextData) error {
 	// Начинаем транзакцию
 	tx, err := dbconn.db.Begin()
@@ -188,6 +189,7 @@ func (dbconn DBConnector) SaveAndUpdateTextData(datas []models.TextData) error {
 	return err
 }
 
+// SaveAndUpdateBinaryData update data if it already exists, or add if it new.
 func (dbconn DBConnector) SaveAndUpdateBinaryData(datas []models.BinaryData) error {
 	tx, err := dbconn.db.Begin()
 	if err != nil {
@@ -228,6 +230,7 @@ func (dbconn DBConnector) SaveAndUpdateBinaryData(datas []models.BinaryData) err
 	return nil
 }
 
+// SaveAndUpdateBankData update data if it already exists, or add if it new.
 func (dbconn DBConnector) SaveAndUpdateBankData(datas []models.BankCard) error {
 	tx, err := dbconn.db.Begin()
 	if err != nil {

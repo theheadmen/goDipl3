@@ -17,7 +17,6 @@ import (
 	"github.com/golang-jwt/jwt"
 	"github.com/theheadmen/goDipl3/models"
 	"github.com/theheadmen/goDipl3/server/dbconnector"
-	"github.com/theheadmen/goDipl3/utils"
 )
 
 // Server is a struct that holds the database connection.
@@ -192,21 +191,21 @@ func (s *Server) StoreHandler(w http.ResponseWriter, r *http.Request) {
 	// Store the data based on the type.
 	switch dataType {
 	case "text":
-		textData, cerr := utils.CreateTextData(userID, data)
+		textData, cerr := models.CreateTextData(userID, data)
 		if cerr != nil {
 			http.Error(w, cerr.Error(), http.StatusBadRequest)
 			return
 		}
 		err = s.db.StoreTextData(textData)
 	case "binary":
-		binaryData, cerr := utils.CreateBinaryData(userID, data)
+		binaryData, cerr := models.CreateBinaryData(userID, data)
 		if cerr != nil {
 			http.Error(w, cerr.Error(), http.StatusBadRequest)
 			return
 		}
 		err = s.db.StoreBinaryData(binaryData)
 	case "bankcard":
-		bankCard, cerr := utils.CreateBankCard(userID, data)
+		bankCard, cerr := models.CreateBankCard(userID, data)
 		if cerr != nil {
 			http.Error(w, cerr.Error(), http.StatusBadRequest)
 			return
@@ -425,21 +424,21 @@ func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	// Update the data based on the type.
 	switch dataType {
 	case "text":
-		textData, cerr := utils.CreateTextData(userID, data)
+		textData, cerr := models.CreateTextData(userID, data)
 		if cerr != nil {
 			http.Error(w, cerr.Error(), http.StatusBadRequest)
 			return
 		}
 		err = s.db.UpdateTextData(userID, dataID, textData)
 	case "binary":
-		binaryData, cerr := utils.CreateBinaryData(userID, data)
+		binaryData, cerr := models.CreateBinaryData(userID, data)
 		if cerr != nil {
 			http.Error(w, cerr.Error(), http.StatusBadRequest)
 			return
 		}
 		err = s.db.UpdateBinaryData(userID, dataID, binaryData)
 	case "bankcard":
-		bankCard, cerr := utils.CreateBankCard(userID, data)
+		bankCard, cerr := models.CreateBankCard(userID, data)
 		if cerr != nil {
 			http.Error(w, cerr.Error(), http.StatusBadRequest)
 			return

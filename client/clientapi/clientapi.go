@@ -3,6 +3,7 @@ package clientapi
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,9 +17,9 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
+	"github.com/theheadmen/goDipl3/client/crypt"
 	"github.com/theheadmen/goDipl3/client/dbconnector"
 	"github.com/theheadmen/goDipl3/models"
-	"github.com/theheadmen/goDipl3/utils"
 )
 
 var (
@@ -108,7 +109,7 @@ var registerCmd = &cobra.Command{
 			fmt.Println("Error parsing URL:", err)
 			os.Exit(1)
 		}
-		resp, err := utils.SendRequest(baseURL, bytes.NewBuffer(userJson), "POST", "application/json", false, authCookies)
+		resp, err := SendRequest(baseURL, bytes.NewBuffer(userJson), "POST", "application/json", false, authCookies)
 		if err != nil {
 			fmt.Println("Error sending registration request:", err)
 			os.Exit(1)
@@ -150,7 +151,7 @@ var loginCmd = &cobra.Command{
 			fmt.Println("Error parsing URL:", err)
 			os.Exit(1)
 		}
-		resp, err := utils.SendRequest(baseURL, bytes.NewBuffer(userJson), "POST", "application/json", false, authCookies)
+		resp, err := SendRequest(baseURL, bytes.NewBuffer(userJson), "POST", "application/json", false, authCookies)
 		if err != nil {
 			fmt.Println("Error sending login request:", err)
 			os.Exit(1)
@@ -183,15 +184,15 @@ var storeCmd = &cobra.Command{
 		expiry, _ := cmd.Flags().GetString("expiry")
 		cvv, _ := cmd.Flags().GetString("cvv")
 
-		encData, err := utils.Encrypt(key, data)
+		encData, err := crypt.Encrypt(key, data)
 		if err != nil {
-			fmt.Println("Error utils.Encrypting data:", err)
+			fmt.Println("Error crypt.Encrypting data:", err)
 			os.Exit(1)
 		}
 
-		encMeta, err := utils.Encrypt(key, meta)
+		encMeta, err := crypt.Encrypt(key, meta)
 		if err != nil {
-			fmt.Println("Error utils.Encrypting meta:", err)
+			fmt.Println("Error crypt.Encrypting meta:", err)
 			os.Exit(1)
 		}
 
@@ -208,15 +209,15 @@ var storeCmd = &cobra.Command{
 				Meta: encMeta,
 			}
 		case "bankcard":
-			encExpiry, err := utils.Encrypt(key, expiry)
+			encExpiry, err := crypt.Encrypt(key, expiry)
 			if err != nil {
-				fmt.Println("Error utils.Encrypting expiry:", err)
+				fmt.Println("Error crypt.Encrypting expiry:", err)
 				os.Exit(1)
 			}
 
-			encCVV, err := utils.Encrypt(key, cvv)
+			encCVV, err := crypt.Encrypt(key, cvv)
 			if err != nil {
-				fmt.Println("Error utils.Encrypting cvv:", err)
+				fmt.Println("Error crypt.Encrypting cvv:", err)
 				os.Exit(1)
 			}
 
@@ -248,7 +249,7 @@ var storeCmd = &cobra.Command{
 		params.Add("type", dataType)
 		baseURL.RawQuery = params.Encode()
 
-		resp, err := utils.SendRequest(baseURL, bytes.NewBuffer(dataJson), "POST", "application/json", true, authCookies)
+		resp, err := SendRequest(baseURL, bytes.NewBuffer(dataJson), "POST", "application/json", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending store request:", err)
 			os.Exit(1)
@@ -278,15 +279,15 @@ var updateCmd = &cobra.Command{
 		expiry, _ := cmd.Flags().GetString("expiry")
 		cvv, _ := cmd.Flags().GetString("cvv")
 
-		encData, err := utils.Encrypt(key, data)
+		encData, err := crypt.Encrypt(key, data)
 		if err != nil {
-			fmt.Println("Error utils.Encrypting data:", err)
+			fmt.Println("Error crypt.Encrypting data:", err)
 			os.Exit(1)
 		}
 
-		encMeta, err := utils.Encrypt(key, meta)
+		encMeta, err := crypt.Encrypt(key, meta)
 		if err != nil {
-			fmt.Println("Error utils.Encrypting meta:", err)
+			fmt.Println("Error crypt.Encrypting meta:", err)
 			os.Exit(1)
 		}
 
@@ -303,15 +304,15 @@ var updateCmd = &cobra.Command{
 				Meta: encMeta,
 			}
 		case "bankcard":
-			encExpiry, err := utils.Encrypt(key, expiry)
+			encExpiry, err := crypt.Encrypt(key, expiry)
 			if err != nil {
-				fmt.Println("Error utils.Encrypting expiry:", err)
+				fmt.Println("Error crypt.Encrypting expiry:", err)
 				os.Exit(1)
 			}
 
-			encCVV, err := utils.Encrypt(key, cvv)
+			encCVV, err := crypt.Encrypt(key, cvv)
 			if err != nil {
-				fmt.Println("Error utils.Encrypting cvv:", err)
+				fmt.Println("Error crypt.Encrypting cvv:", err)
 				os.Exit(1)
 			}
 
@@ -344,7 +345,7 @@ var updateCmd = &cobra.Command{
 		params.Add("data_id", dataID)
 		baseURL.RawQuery = params.Encode()
 
-		resp, err := utils.SendRequest(baseURL, bytes.NewBuffer(dataJson), "POST", "application/json", true, authCookies)
+		resp, err := SendRequest(baseURL, bytes.NewBuffer(dataJson), "POST", "application/json", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending update request:", err)
 			os.Exit(1)
@@ -379,9 +380,9 @@ var getCmd = &cobra.Command{
 					fmt.Println("Error getting text data:", err)
 					os.Exit(1)
 				}
-				textData := utils.ConvertLocalToTextData(textLocalData)
+				textData := models.ConvertLocalToTextData(textLocalData)
 				// а затем дешифруем чтобы показать
-				err = utils.DecryptTextData(textData, key)
+				err = crypt.DecryptTextData(textData, key)
 				if err != nil {
 					fmt.Println("Error decrypt:", err)
 					os.Exit(1)
@@ -393,9 +394,9 @@ var getCmd = &cobra.Command{
 					fmt.Println("Error getting binary data:", err)
 					os.Exit(1)
 				}
-				binaryData := utils.ConvertLocalToBinaryData(binaryLocalData)
+				binaryData := models.ConvertLocalToBinaryData(binaryLocalData)
 				// а затем дешифруем чтобы показать
-				err = utils.DecryptBinaryData(binaryData, key)
+				err = crypt.DecryptBinaryData(binaryData, key)
 				if err != nil {
 					fmt.Println("Error decrypt:", err)
 					os.Exit(1)
@@ -408,9 +409,9 @@ var getCmd = &cobra.Command{
 					os.Exit(1)
 				}
 
-				bankCard := utils.ConvertLocalToBankData(bankLocalCard)
+				bankCard := models.ConvertLocalToBankData(bankLocalCard)
 				// а затем дешифруем чтобы показать
-				err = utils.DecryptBankData(bankCard, key)
+				err = crypt.DecryptBankData(bankCard, key)
 				if err != nil {
 					fmt.Println("Error decrypt:", err)
 					os.Exit(1)
@@ -432,7 +433,7 @@ var getCmd = &cobra.Command{
 			params.Add("type", dataType)
 			baseURL.RawQuery = params.Encode()
 
-			resp, err := utils.SendRequest(baseURL, nil, "GET", "", true, authCookies)
+			resp, err := SendRequest(baseURL, nil, "GET", "", true, authCookies)
 			if err != nil {
 				fmt.Println("Error sending get request:", err)
 				os.Exit(1)
@@ -462,13 +463,13 @@ var getCmd = &cobra.Command{
 					os.Exit(1)
 				}
 				// переводим данные в локальные и пробуем сохранить
-				dataToLocal := utils.ConvertTextToLocalData(textData)
+				dataToLocal := models.ConvertTextToLocalData(textData)
 				err = db.SaveAndUpdateTextData(dataToLocal)
 				if err != nil {
 					fmt.Println("Error save local data:", err)
 				}
 				// а затем дешифруем чтобы показать
-				err = utils.DecryptTextData(textData, key)
+				err = crypt.DecryptTextData(textData, key)
 				if err != nil {
 					fmt.Println("Error decrypt:", err)
 					os.Exit(1)
@@ -483,14 +484,14 @@ var getCmd = &cobra.Command{
 				}
 
 				// переводим данные в локальные и пробуем сохранить
-				dataToLocal := utils.ConvertBinaryToLocalData(binaryData)
+				dataToLocal := models.ConvertBinaryToLocalData(binaryData)
 				err = db.SaveAndUpdateBinaryData(dataToLocal)
 
 				if err != nil {
 					fmt.Println("Error save local data:", err)
 				}
 				// а затем дешифруем чтобы показать
-				err = utils.DecryptBinaryData(binaryData, key)
+				err = crypt.DecryptBinaryData(binaryData, key)
 				if err != nil {
 					fmt.Println("Error decrypt:", err)
 					os.Exit(1)
@@ -504,14 +505,14 @@ var getCmd = &cobra.Command{
 					os.Exit(1)
 				}
 				// переводим данные в локальные и пробуем сохранить
-				dataToLocal := utils.ConvertBankToLocalData(bankCard)
+				dataToLocal := models.ConvertBankToLocalData(bankCard)
 				err = db.SaveAndUpdateBankData(dataToLocal)
 
 				if err != nil {
 					fmt.Println("Error save local data:", err)
 				}
 				// а затем дешифруем чтобы показать
-				err = utils.DecryptBankData(bankCard, key)
+				err = crypt.DecryptBankData(bankCard, key)
 				if err != nil {
 					fmt.Println("Error decrypt:", err)
 					os.Exit(1)
@@ -545,7 +546,7 @@ var deleteCmd = &cobra.Command{
 		params.Add("id", dataID)
 		baseURL.RawQuery = params.Encode()
 
-		resp, err := utils.SendRequest(baseURL, nil, "POST", "", true, authCookies)
+		resp, err := SendRequest(baseURL, nil, "POST", "", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending delete request:", err)
 			os.Exit(1)
@@ -592,7 +593,7 @@ func StoreFile(filePath string, key []byte) error {
 	}
 
 	// Шифруем содержимое файла
-	encryptedContent, err := utils.Encrypt(key, string(fileContent))
+	encryptedContent, err := crypt.Encrypt(key, string(fileContent))
 	if err != nil {
 		return err
 	}
@@ -624,7 +625,7 @@ func StoreFile(filePath string, key []byte) error {
 		return err
 	}
 
-	resp, err := utils.SendRequest(baseURL, body, "POST", writer.FormDataContentType(), true, authCookies)
+	resp, err := SendRequest(baseURL, body, "POST", writer.FormDataContentType(), true, authCookies)
 	if err != nil {
 		fmt.Println("Error sending store request:", err)
 		return err
@@ -653,7 +654,7 @@ var listFilesCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		resp, err := utils.SendRequest(baseURL, nil, "GET", "", true, authCookies)
+		resp, err := SendRequest(baseURL, nil, "GET", "", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending list files request:", err)
 			os.Exit(1)
@@ -708,7 +709,7 @@ var getFileCmd = &cobra.Command{
 		params.Add("fileName", serverFilename)
 		baseURL.RawQuery = params.Encode()
 
-		resp, err := utils.SendRequest(baseURL, nil, "GET", "application/json", true, authCookies)
+		resp, err := SendRequest(baseURL, nil, "GET", "application/json", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending get file request:", err)
 			os.Exit(1)
@@ -729,9 +730,9 @@ var getFileCmd = &cobra.Command{
 		}
 
 		// Расшифровываем полученные данные
-		decryptedData, err := utils.Decrypt(key, string(body))
+		decryptedData, err := crypt.Decrypt(key, string(body))
 		if err != nil {
-			fmt.Println("Error utils.Decrypting data:", err)
+			fmt.Println("Error crypt.Decrypting data:", err)
 			os.Exit(1)
 		}
 
@@ -765,7 +766,7 @@ var deleteFileCmd = &cobra.Command{
 		params.Add("fileName", fileName)
 		baseURL.RawQuery = params.Encode()
 
-		resp, err := utils.SendRequest(baseURL, nil, "DELETE", "", true, authCookies)
+		resp, err := SendRequest(baseURL, nil, "DELETE", "", true, authCookies)
 		if err != nil {
 			fmt.Println("Error sending delete file request:", err)
 			os.Exit(1)
@@ -819,7 +820,7 @@ var syncToServerCmd = &cobra.Command{
 			fmt.Println("Error getting text data:", err)
 			os.Exit(1)
 		}
-		textData := utils.ConvertLocalToTextData(textLocalData)
+		textData := models.ConvertLocalToTextData(textLocalData)
 		dataJson, err := json.Marshal(textData)
 		if err != nil {
 			fmt.Println("Error marshalling data:", err)
@@ -833,7 +834,7 @@ var syncToServerCmd = &cobra.Command{
 			fmt.Println("Error getting binary data:", err)
 			os.Exit(1)
 		}
-		binaryData := utils.ConvertLocalToBinaryData(binaryLocalData)
+		binaryData := models.ConvertLocalToBinaryData(binaryLocalData)
 		dataJson, err = json.Marshal(binaryData)
 		if err != nil {
 			fmt.Println("Error marshalling data:", err)
@@ -847,7 +848,7 @@ var syncToServerCmd = &cobra.Command{
 			fmt.Println("Error getting bank data:", err)
 			os.Exit(1)
 		}
-		bankData := utils.ConvertLocalToBankData(bankLocalData)
+		bankData := models.ConvertLocalToBankData(bankLocalData)
 		dataJson, err = json.Marshal(bankData)
 		if err != nil {
 			fmt.Println("Error marshalling data:", err)
@@ -872,7 +873,7 @@ func SendDataToSync(dataJson []byte, dataType string) {
 	params.Add("type", dataType)
 	baseURL.RawQuery = params.Encode()
 
-	resp, err := utils.SendRequest(baseURL, bytes.NewBuffer(dataJson), "POST", "application/json", true, authCookies)
+	resp, err := SendRequest(baseURL, bytes.NewBuffer(dataJson), "POST", "application/json", true, authCookies)
 	if err != nil {
 		fmt.Println("Error sending sync request:", err)
 		os.Exit(1)
@@ -883,6 +884,38 @@ func SendDataToSync(dataJson []byte, dataType string) {
 		fmt.Println("sync failed with status:", resp.Status)
 		os.Exit(1)
 	}
+}
+
+func SendRequest(baseURL *url.URL, body io.Reader, reqType string, contentType string, withCookie bool, authCookies []*http.Cookie) (*http.Response, error) {
+	// Создаем новый транспорт, который будет использовать TLS
+	// Используйте InsecureSkipVerify: false для рабочей среды
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+
+	req, err := http.NewRequest(reqType, baseURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
+	// Установка cookie в заголовки запроса
+	if withCookie {
+		for _, cookie := range authCookies {
+			req.AddCookie(cookie)
+		}
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
 }
 
 func init() {
