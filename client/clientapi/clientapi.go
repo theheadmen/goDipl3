@@ -371,10 +371,10 @@ var getCmd = &cobra.Command{
 		isLocal, _ := cmd.Flags().GetBool("local")
 		if isLocal {
 			db := dbconnector.OpenDB()
-			defer db.Close()
+			defer db.DB.Close()
 			switch dataType {
 			case "text":
-				textLocalData, err := dbconnector.GetAllTextData(db)
+				textLocalData, err := db.GetAllTextData()
 				if err != nil {
 					fmt.Println("Error getting text data:", err)
 					os.Exit(1)
@@ -388,7 +388,7 @@ var getCmd = &cobra.Command{
 				}
 				fmt.Printf("TextData: %+v\n", textData)
 			case "binary":
-				binaryLocalData, err := dbconnector.GetAllBinaryData(db)
+				binaryLocalData, err := db.GetAllBinaryData()
 				if err != nil {
 					fmt.Println("Error getting binary data:", err)
 					os.Exit(1)
@@ -402,7 +402,7 @@ var getCmd = &cobra.Command{
 				}
 				fmt.Printf("BinaryData: %+v\n", binaryData)
 			case "bankcard":
-				bankLocalCard, err := dbconnector.GetAllBankData(db)
+				bankLocalCard, err := db.GetAllBankData()
 				if err != nil {
 					fmt.Println("Error getting bankcard:", err)
 					os.Exit(1)
@@ -451,7 +451,7 @@ var getCmd = &cobra.Command{
 			}
 
 			db := dbconnector.OpenDB()
-			defer db.Close()
+			defer db.DB.Close()
 
 			switch dataType {
 			case "text":
@@ -463,7 +463,7 @@ var getCmd = &cobra.Command{
 				}
 				// переводим данные в локальные и пробуем сохранить
 				dataToLocal := utils.ConvertTextToLocalData(textData)
-				err = dbconnector.SaveAndUpdateTextData(db, dataToLocal)
+				err = db.SaveAndUpdateTextData(dataToLocal)
 				if err != nil {
 					fmt.Println("Error save local data:", err)
 				}
@@ -484,7 +484,7 @@ var getCmd = &cobra.Command{
 
 				// переводим данные в локальные и пробуем сохранить
 				dataToLocal := utils.ConvertBinaryToLocalData(binaryData)
-				err = dbconnector.SaveAndUpdateBinaryData(db, dataToLocal)
+				err = db.SaveAndUpdateBinaryData(dataToLocal)
 
 				if err != nil {
 					fmt.Println("Error save local data:", err)
@@ -505,7 +505,7 @@ var getCmd = &cobra.Command{
 				}
 				// переводим данные в локальные и пробуем сохранить
 				dataToLocal := utils.ConvertBankToLocalData(bankCard)
-				err = dbconnector.SaveAndUpdateBankData(db, dataToLocal)
+				err = db.SaveAndUpdateBankData(dataToLocal)
 
 				if err != nil {
 					fmt.Println("Error save local data:", err)
@@ -812,9 +812,9 @@ var syncToServerCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
 		db := dbconnector.OpenDB()
-		defer db.Close()
+		defer db.DB.Close()
 
-		textLocalData, err := dbconnector.GetAllTextData(db)
+		textLocalData, err := db.GetAllTextData()
 		if err != nil {
 			fmt.Println("Error getting text data:", err)
 			os.Exit(1)
@@ -828,7 +828,7 @@ var syncToServerCmd = &cobra.Command{
 		dataType := "text"
 		SendDataToSync(dataJson, dataType)
 
-		binaryLocalData, err := dbconnector.GetAllBinaryData(db)
+		binaryLocalData, err := db.GetAllBinaryData()
 		if err != nil {
 			fmt.Println("Error getting binary data:", err)
 			os.Exit(1)
@@ -842,7 +842,7 @@ var syncToServerCmd = &cobra.Command{
 		dataType = "binary"
 		SendDataToSync(dataJson, dataType)
 
-		bankLocalData, err := dbconnector.GetAllBankData(db)
+		bankLocalData, err := db.GetAllBankData()
 		if err != nil {
 			fmt.Println("Error getting bank data:", err)
 			os.Exit(1)

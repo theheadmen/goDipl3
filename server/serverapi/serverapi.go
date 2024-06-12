@@ -22,12 +22,12 @@ import (
 
 // Server is a struct that holds the database connection.
 type Server struct {
-	db *sql.DB
+	db *dbconnector.DBConnector
 }
 
 // NewServer creates a new Server instance with the given database connection.
 func NewServer(db *sql.DB) *Server {
-	return &Server{db: db}
+	return &Server{db: dbconnector.NewDBConnector(db)}
 }
 
 // JWT secret key, this should be stored securely and not exposed in the code.
@@ -52,7 +52,7 @@ func (s *Server) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println(user)
 
 	// Check if the user already exists.
-	err = dbconnector.CheckUserExists(user, s.db)
+	err = s.db.CheckUserExists(user)
 	if err != sql.ErrNoRows {
 		log.Println("User already exists")
 		http.Error(w, "User already exists", http.StatusConflict)
@@ -65,7 +65,7 @@ func (s *Server) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	user.Password = hex.EncodeToString(hasher.Sum(nil))
 
 	// Insert the user into the database.
-	result, err := dbconnector.InsertNewUser(user, s.db)
+	result, err := s.db.InsertNewUser(user)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -124,7 +124,7 @@ func (s *Server) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	hashedPassword := hex.EncodeToString(hasher.Sum(nil))
 
 	// Retrieve the user from the database.
-	storedUser, err := dbconnector.GetUserByName(user.Username, s.db)
+	storedUser, err := s.db.GetUserByName(user.Username)
 	if err != nil {
 		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 		return
@@ -197,21 +197,21 @@ func (s *Server) StoreHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, cerr.Error(), http.StatusBadRequest)
 			return
 		}
-		err = dbconnector.StoreTextData(textData, s.db)
+		err = s.db.StoreTextData(textData)
 	case "binary":
 		binaryData, cerr := utils.CreateBinaryData(userID, data)
 		if cerr != nil {
 			http.Error(w, cerr.Error(), http.StatusBadRequest)
 			return
 		}
-		err = dbconnector.StoreBinaryData(binaryData, s.db)
+		err = s.db.StoreBinaryData(binaryData)
 	case "bankcard":
 		bankCard, cerr := utils.CreateBankCard(userID, data)
 		if cerr != nil {
 			http.Error(w, cerr.Error(), http.StatusBadRequest)
 			return
 		}
-		err = dbconnector.StoreBankCard(bankCard, s.db)
+		err = s.db.StoreBankCard(bankCard)
 	default:
 		log.Println("invalid data type: ", dataType)
 		http.Error(w, "Invalid data type", http.StatusBadRequest)
@@ -253,7 +253,7 @@ func (s *Server) SyncHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err = dbconnector.SaveAndUpdateTextData(textDataArray, s.db)
+		err = s.db.SaveAndUpdateTextData(textDataArray)
 	case "binary":
 		var binaryDataArray []models.BinaryData
 		err = json.NewDecoder(r.Body).Decode(&binaryDataArray)
@@ -262,7 +262,7 @@ func (s *Server) SyncHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err = dbconnector.SaveAndUpdateBinaryData(binaryDataArray, s.db)
+		err = s.db.SaveAndUpdateBinaryData(binaryDataArray)
 	case "bankcard":
 		var bankCardArray []models.BankCard
 		err = json.NewDecoder(r.Body).Decode(&bankCardArray)
@@ -271,7 +271,7 @@ func (s *Server) SyncHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err = dbconnector.SaveAndUpdateBankData(bankCardArray, s.db)
+		err = s.db.SaveAndUpdateBankData(bankCardArray)
 	default:
 		log.Println("invalid data type: ", dataType)
 		http.Error(w, "Invalid data type", http.StatusBadRequest)
@@ -325,21 +325,21 @@ func (s *Server) RetrieveHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("for ", dataType)
 	switch dataType {
 	case "text":
-		textData, err := dbconnector.RetrieveTextData(userID, s.db)
+		textData, err := s.db.RetrieveTextData(userID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		json.NewEncoder(w).Encode(textData)
 	case "binary":
-		binaryData, err := dbconnector.RetrieveBinaryData(userID, s.db)
+		binaryData, err := s.db.RetrieveBinaryData(userID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		json.NewEncoder(w).Encode(binaryData)
 	case "bankcard":
-		bankCards, err := dbconnector.RetrieveBankCards(userID, s.db)
+		bankCards, err := s.db.RetrieveBankCards(userID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -374,11 +374,11 @@ func (s *Server) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	// Delete the data based on the type.
 	switch dataType {
 	case "text":
-		err = dbconnector.DeleteTextData(userID, dataID, s.db)
+		err = s.db.DeleteTextData(userID, dataID)
 	case "binary":
-		err = dbconnector.DeleteBinaryData(userID, dataID, s.db)
+		err = s.db.DeleteBinaryData(userID, dataID)
 	case "bankcard":
-		err = dbconnector.DeleteBankCard(userID, dataID, s.db)
+		err = s.db.DeleteBankCard(userID, dataID)
 	default:
 		log.Println("invalid data type: ", dataType)
 		http.Error(w, "Invalid data type", http.StatusBadRequest)
@@ -425,11 +425,11 @@ func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	// Update the data based on the type.
 	switch dataType {
 	case "text":
-		err = dbconnector.UpdateTextData(userID, dataID, data, s.db)
+		err = s.db.UpdateTextData(userID, dataID, data)
 	case "binary":
-		err = dbconnector.UpdateBinaryData(userID, dataID, data, s.db)
+		err = s.db.UpdateBinaryData(userID, dataID, data)
 	case "bankcard":
-		err = dbconnector.UpdateBankCard(userID, dataID, data, s.db)
+		err = s.db.UpdateBankCard(userID, dataID, data)
 	default:
 		log.Println("invalid data type: ", dataType)
 		http.Error(w, "Invalid data type", http.StatusBadRequest)
@@ -483,7 +483,7 @@ func (s *Server) StoreFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store the file information in the database.
-	err = dbconnector.StoreFileData(userID, "files/"+fileName, fileName, s.db)
+	err = s.db.StoreFileData(userID, "files/"+fileName, fileName)
 	if err != nil {
 		log.Println("can't store file data: ", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -540,7 +540,7 @@ func (s *Server) GetFileHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("we try to get", fileName, "for", userID)
 
 	// Get the file path from the database.
-	filePath, err := dbconnector.GetFilePath(userID, fileName, s.db)
+	filePath, err := s.db.GetFilePath(userID, fileName)
 	if err != nil {
 		log.Println("can't get file path: ", err.Error(), fileName)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -582,7 +582,7 @@ func (s *Server) ListFilesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the list of file names from the database.
-	fileNames, err := dbconnector.GetFileNames(userID, s.db)
+	fileNames, err := s.db.GetFileNames(userID)
 	if err != nil {
 		log.Println("can't get file names: ", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -621,7 +621,7 @@ func (s *Server) DeleteFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the file path from the database.
-	filePath, err := dbconnector.GetFilePath(userID, fileName, s.db)
+	filePath, err := s.db.GetFilePath(userID, fileName)
 	if err != nil {
 		log.Println("can't get file path: ", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -644,7 +644,7 @@ func (s *Server) DeleteFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete the file information from the database.
-	err = dbconnector.DeleteFileData(userID, fileName, s.db)
+	err = s.db.DeleteFileData(userID, fileName)
 	if err != nil {
 		log.Println("can't delete file data: ", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)

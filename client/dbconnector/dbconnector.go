@@ -9,7 +9,7 @@ import (
 	"github.com/theheadmen/goDipl3/models"
 )
 
-func InitDB(db *sql.DB) {
+func initDB(db *sql.DB) {
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS text_local_data (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,37 +48,41 @@ func InitDB(db *sql.DB) {
 	}
 }
 
-func OpenDB() *sql.DB {
+type DBConnector struct {
+	DB *sql.DB
+}
+
+func OpenDB() *DBConnector {
 	// Open the database.
 	db, err := sql.Open("sqlite3", "./gophkeeper.db")
 	if err != nil {
-		log.Fatalf("Failed to open database: %v", err)
+		log.Printf("Failed to open database: %v", err)
 		os.Exit(1)
 	}
 
 	// Initialize the database.
-	InitDB(db)
-	return db
+	initDB(db)
+	return &DBConnector{DB: db}
 }
 
-func SaveTextData(db *sql.DB, data models.TextLocalData) error {
-	_, err := db.Exec(`
+func (dbconn DBConnector) SaveTextData(data models.TextLocalData) error {
+	_, err := dbconn.DB.Exec(`
 		INSERT INTO text_local_data (uuid, user_id, data, meta, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, data.UUID, data.UserID, data.Data, data.Meta, data.CreatedAt, data.UpdatedAt)
 	return err
 }
 
-func UpdateTextData(db *sql.DB, id int, data models.TextLocalData) error {
+func (dbconn DBConnector) UpdateTextData(id int, data models.TextLocalData) error {
 	// Проверяем, существует ли запись с таким id
 	var exists bool
-	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM text_local_data WHERE id=?)", id).Scan(&exists)
+	err := dbconn.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM text_local_data WHERE id=?)", id).Scan(&exists)
 	if err != nil {
 		return err
 	}
 
 	if exists {
-		_, err := db.Exec(`
+		_, err := dbconn.DB.Exec(`
 			UPDATE text_local_data
 			SET uuid = ?, user_id = ?, data = ?, meta = ?, updated_at = ?
 			WHERE id = ?
@@ -89,12 +93,12 @@ func UpdateTextData(db *sql.DB, id int, data models.TextLocalData) error {
 	}
 }
 
-func SaveAndUpdateTextData(db *sql.DB, datas []models.TextLocalData) error {
+func (dbconn DBConnector) SaveAndUpdateTextData(datas []models.TextLocalData) error {
 	// Запись TextLocalData в локальную БД клиента
 	for _, data := range datas {
 		// Проверка наличия данных в локальной БД
 		var localData models.TextLocalData
-		err := db.QueryRow("SELECT * FROM text_local_data WHERE uuid = ? AND user_id = ?", data.UUID, data.UserID).Scan(
+		err := dbconn.DB.QueryRow("SELECT * FROM text_local_data WHERE uuid = ? AND user_id = ?", data.UUID, data.UserID).Scan(
 			&localData.ID, &localData.UUID, &localData.UserID, &localData.Data, &localData.Meta, &localData.CreatedAt, &localData.UpdatedAt)
 		if err != nil && err != sql.ErrNoRows {
 			return err
@@ -102,14 +106,14 @@ func SaveAndUpdateTextData(db *sql.DB, datas []models.TextLocalData) error {
 
 		// Если данные существуют и локальные данные старее, обновляем их
 		if err == nil && localData.UpdatedAt.Before(data.UpdatedAt) {
-			_, err := db.Exec("UPDATE text_local_data SET data = ?, meta = ?, updated_at = ? WHERE uuid = ? AND user_id = ?",
+			_, err := dbconn.DB.Exec("UPDATE text_local_data SET data = ?, meta = ?, updated_at = ? WHERE uuid = ? AND user_id = ?",
 				data.Data, data.Meta, data.UpdatedAt, data.UUID, data.UserID)
 			if err != nil {
 				return err
 			}
 		} else if err == sql.ErrNoRows {
 			// Если данных нет, вставляем новые данные
-			_, err := db.Exec("INSERT INTO text_local_data (uuid, user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+			_, err := dbconn.DB.Exec("INSERT INTO text_local_data (uuid, user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
 				data.UUID, data.UserID, data.Data, data.Meta, data.CreatedAt, data.UpdatedAt)
 			if err != nil {
 				return err
@@ -120,13 +124,13 @@ func SaveAndUpdateTextData(db *sql.DB, datas []models.TextLocalData) error {
 	return nil
 }
 
-func DeleteTextData(db *sql.DB, id int) error {
-	_, err := db.Exec("DELETE FROM text_local_data WHERE id = ?", id)
+func (dbconn DBConnector) DeleteTextData(id int) error {
+	_, err := dbconn.DB.Exec("DELETE FROM text_local_data WHERE id = ?", id)
 	return err
 }
 
-func GetAllTextData(db *sql.DB) ([]models.TextLocalData, error) {
-	rows, err := db.Query("SELECT id, uuid, user_id, data, meta, created_at, updated_at FROM text_local_data")
+func (dbconn DBConnector) GetAllTextData() ([]models.TextLocalData, error) {
+	rows, err := dbconn.DB.Query("SELECT id, uuid, user_id, data, meta, created_at, updated_at FROM text_local_data")
 	if err != nil {
 		return nil, err
 	}
@@ -145,24 +149,24 @@ func GetAllTextData(db *sql.DB) ([]models.TextLocalData, error) {
 	return dataList, nil
 }
 
-func SaveBinaryData(db *sql.DB, data models.BinaryLocalData) error {
-	_, err := db.Exec(`
+func (dbconn DBConnector) SaveBinaryData(data models.BinaryLocalData) error {
+	_, err := dbconn.DB.Exec(`
 		INSERT INTO binary_local_data (uuid, user_id, data, meta, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 	`, data.UUID, data.UserID, data.Data, data.Meta, data.CreatedAt, data.UpdatedAt)
 	return err
 }
 
-func UpdateBinaryData(db *sql.DB, id int, data models.BinaryLocalData) error {
+func (dbconn DBConnector) UpdateBinaryData(id int, data models.BinaryLocalData) error {
 	// Проверяем, существует ли запись с таким id
 	var exists bool
-	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM binary_local_data WHERE id=?)", id).Scan(&exists)
+	err := dbconn.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM binary_local_data WHERE id=?)", id).Scan(&exists)
 	if err != nil {
 		return err
 	}
 
 	if exists {
-		_, err := db.Exec(`
+		_, err := dbconn.DB.Exec(`
 			UPDATE binary_local_data
 			SET uuid = ?, user_id = ?, data = ?, meta = ?, updated_at = ?
 			WHERE id = ?
@@ -173,12 +177,12 @@ func UpdateBinaryData(db *sql.DB, id int, data models.BinaryLocalData) error {
 	}
 }
 
-func SaveAndUpdateBinaryData(db *sql.DB, datas []models.BinaryLocalData) error {
+func (dbconn DBConnector) SaveAndUpdateBinaryData(datas []models.BinaryLocalData) error {
 	// Запись BinaryLocalData в локальную БД клиента
 	for _, data := range datas {
 		// Проверка наличия данных в локальной БД
 		var localData models.BinaryLocalData
-		err := db.QueryRow("SELECT * FROM binary_local_data WHERE uuid = ? AND user_id = ?", data.UUID, data.UserID).Scan(
+		err := dbconn.DB.QueryRow("SELECT * FROM binary_local_data WHERE uuid = ? AND user_id = ?", data.UUID, data.UserID).Scan(
 			&localData.ID, &localData.UUID, &localData.UserID, &localData.Data, &localData.Meta, &localData.CreatedAt, &localData.UpdatedAt)
 		if err != nil && err != sql.ErrNoRows {
 			return err
@@ -186,14 +190,14 @@ func SaveAndUpdateBinaryData(db *sql.DB, datas []models.BinaryLocalData) error {
 
 		// Если данные существуют и локальные данные старее, обновляем их
 		if err == nil && localData.UpdatedAt.Before(data.UpdatedAt) {
-			_, err := db.Exec("UPDATE binary_local_data SET data = ?, meta = ?, updated_at = ? WHERE uuid = ? AND user_id = ?",
+			_, err := dbconn.DB.Exec("UPDATE binary_local_data SET data = ?, meta = ?, updated_at = ? WHERE uuid = ? AND user_id = ?",
 				data.Data, data.Meta, data.UpdatedAt, data.UUID, data.UserID)
 			if err != nil {
 				return err
 			}
 		} else if err == sql.ErrNoRows {
 			// Если данных нет, вставляем новые данные
-			_, err := db.Exec("INSERT INTO binary_local_data (uuid, user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+			_, err := dbconn.DB.Exec("INSERT INTO binary_local_data (uuid, user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
 				data.UUID, data.UserID, data.Data, data.Meta, data.CreatedAt, data.UpdatedAt)
 			if err != nil {
 				return err
@@ -204,14 +208,14 @@ func SaveAndUpdateBinaryData(db *sql.DB, datas []models.BinaryLocalData) error {
 	return nil
 }
 
-func DeleteBinaryData(db *sql.DB, id int) error {
-	_, err := db.Exec("DELETE FROM binary_local_data WHERE id = ?", id)
+func (dbconn DBConnector) DeleteBinaryData(id int) error {
+	_, err := dbconn.DB.Exec("DELETE FROM binary_local_data WHERE id = ?", id)
 	return err
 }
 
-func GetBinaryData(db *sql.DB, id int) (*models.BinaryLocalData, error) {
+func (dbconn DBConnector) GetBinaryData(id int) (*models.BinaryLocalData, error) {
 	var data models.BinaryLocalData
-	err := db.QueryRow("SELECT id, uuid, user_id, data, meta, created_at, updated_at FROM binary_local_data WHERE id = ?", id).
+	err := dbconn.DB.QueryRow("SELECT id, uuid, user_id, data, meta, created_at, updated_at FROM binary_local_data WHERE id = ?", id).
 		Scan(&data.ID, &data.UUID, &data.UserID, data.Data, &data.Meta, &data.CreatedAt, &data.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -222,8 +226,8 @@ func GetBinaryData(db *sql.DB, id int) (*models.BinaryLocalData, error) {
 	return &data, nil
 }
 
-func GetAllBinaryData(db *sql.DB) ([]models.BinaryLocalData, error) {
-	rows, err := db.Query("SELECT id, uuid, user_id, data, meta, created_at, updated_at FROM binary_local_data")
+func (dbconn DBConnector) GetAllBinaryData() ([]models.BinaryLocalData, error) {
+	rows, err := dbconn.DB.Query("SELECT id, uuid, user_id, data, meta, created_at, updated_at FROM binary_local_data")
 	if err != nil {
 		return nil, err
 	}
@@ -242,24 +246,24 @@ func GetAllBinaryData(db *sql.DB) ([]models.BinaryLocalData, error) {
 	return dataList, nil
 }
 
-func SaveBankCard(db *sql.DB, data models.BankLocalCard) error {
-	_, err := db.Exec(`
+func (dbconn DBConnector) SaveBankCard(data models.BankLocalCard) error {
+	_, err := dbconn.DB.Exec(`
 		INSERT INTO bank_local_card (uuid, user_id, number, expiry, cvv, meta, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`, data.UUID, data.UserID, data.Number, data.Expiry, data.CVV, data.Meta, data.CreatedAt, data.UpdatedAt)
 	return err
 }
 
-func UpdateBankData(db *sql.DB, id int, data models.BankLocalCard) error {
+func (dbconn DBConnector) UpdateBankData(id int, data models.BankLocalCard) error {
 	// Проверяем, существует ли запись с таким id
 	var exists bool
-	err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM bank_local_card WHERE id=?)", id).Scan(&exists)
+	err := dbconn.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM bank_local_card WHERE id=?)", id).Scan(&exists)
 	if err != nil {
 		return err
 	}
 
 	if exists {
-		_, err := db.Exec(`
+		_, err := dbconn.DB.Exec(`
 			UPDATE bank_local_card
 			SET uuid = ?, user_id = ?, number = ?, expiry = ?, cvv = ?, meta = ?, updated_at = ?
 			WHERE id = ?
@@ -270,12 +274,12 @@ func UpdateBankData(db *sql.DB, id int, data models.BankLocalCard) error {
 	}
 }
 
-func SaveAndUpdateBankData(db *sql.DB, datas []models.BankLocalCard) error {
+func (dbconn DBConnector) SaveAndUpdateBankData(datas []models.BankLocalCard) error {
 	// Запись BankLocalCard в локальную БД клиента
 	for _, data := range datas {
 		// Проверка наличия данных в локальной БД
 		var localData models.BankLocalCard
-		err := db.QueryRow("SELECT * FROM bank_local_card WHERE uuid = ? AND user_id = ?", data.UUID, data.UserID).Scan(
+		err := dbconn.DB.QueryRow("SELECT * FROM bank_local_card WHERE uuid = ? AND user_id = ?", data.UUID, data.UserID).Scan(
 			&localData.ID, &localData.UUID, &localData.UserID, &localData.Number, &localData.Expiry, &localData.CVV, &localData.Meta, &localData.CreatedAt, &localData.UpdatedAt)
 		if err != nil && err != sql.ErrNoRows {
 			return err
@@ -283,14 +287,14 @@ func SaveAndUpdateBankData(db *sql.DB, datas []models.BankLocalCard) error {
 
 		// Если данные существуют и локальные данные старее, обновляем их
 		if err == nil && localData.UpdatedAt.Before(data.UpdatedAt) {
-			_, err := db.Exec("UPDATE bank_local_card SET number = ?, expiry = ?, cvv = ?, meta = ?, updated_at = ? WHERE uuid = ? AND user_id = ?",
+			_, err := dbconn.DB.Exec("UPDATE bank_local_card SET number = ?, expiry = ?, cvv = ?, meta = ?, updated_at = ? WHERE uuid = ? AND user_id = ?",
 				data.Number, data.Expiry, data.CVV, data.Meta, data.UpdatedAt, data.UUID, data.UserID)
 			if err != nil {
 				return err
 			}
 		} else if err == sql.ErrNoRows {
 			// Если данных нет, вставляем новые данные
-			_, err := db.Exec("INSERT INTO bank_local_card (uuid, user_id, number, expiry, cvv, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			_, err := dbconn.DB.Exec("INSERT INTO bank_local_card (uuid, user_id, number, expiry, cvv, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 				data.UUID, data.UserID, data.Number, data.Expiry, data.CVV, data.Meta, data.CreatedAt, data.UpdatedAt)
 			if err != nil {
 				return err
@@ -301,17 +305,17 @@ func SaveAndUpdateBankData(db *sql.DB, datas []models.BankLocalCard) error {
 	return nil
 }
 
-func DeleteBankData(db *sql.DB, id int) error {
-	_, err := db.Exec("DELETE FROM bank_local_card WHERE id = ?", id)
+func (dbconn DBConnector) DeleteBankData(id int) error {
+	_, err := dbconn.DB.Exec("DELETE FROM bank_local_card WHERE id = ?", id)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func GetBankData(db *sql.DB, id int) (*models.BankLocalCard, error) {
+func (dbconn DBConnector) GetBankData(id int) (*models.BankLocalCard, error) {
 	var data models.BankLocalCard
-	err := db.QueryRow("SELECT id, uuid, user_id, number, expiry, cvv, meta, created_at, updated_at FROM bank_local_card WHERE id = ?", id).
+	err := dbconn.DB.QueryRow("SELECT id, uuid, user_id, number, expiry, cvv, meta, created_at, updated_at FROM bank_local_card WHERE id = ?", id).
 		Scan(&data.ID, &data.UUID, &data.UserID, &data.Number, &data.Expiry, &data.CVV, &data.Meta, &data.CreatedAt, &data.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -322,8 +326,8 @@ func GetBankData(db *sql.DB, id int) (*models.BankLocalCard, error) {
 	return &data, nil
 }
 
-func GetAllBankData(db *sql.DB) ([]models.BankLocalCard, error) {
-	rows, err := db.Query("SELECT id, uuid, user_id, number, expiry, cvv, meta, created_at, updated_at FROM bank_local_card")
+func (dbconn DBConnector) GetAllBankData() ([]models.BankLocalCard, error) {
+	rows, err := dbconn.DB.Query("SELECT id, uuid, user_id, number, expiry, cvv, meta, created_at, updated_at FROM bank_local_card")
 	if err != nil {
 		return nil, err
 	}
