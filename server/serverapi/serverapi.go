@@ -425,11 +425,26 @@ func (s *Server) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	// Update the data based on the type.
 	switch dataType {
 	case "text":
-		err = s.db.UpdateTextData(userID, dataID, data)
+		textData, cerr := utils.CreateTextData(userID, data)
+		if cerr != nil {
+			http.Error(w, cerr.Error(), http.StatusBadRequest)
+			return
+		}
+		err = s.db.UpdateTextData(userID, dataID, textData)
 	case "binary":
-		err = s.db.UpdateBinaryData(userID, dataID, data)
+		binaryData, cerr := utils.CreateBinaryData(userID, data)
+		if cerr != nil {
+			http.Error(w, cerr.Error(), http.StatusBadRequest)
+			return
+		}
+		err = s.db.UpdateBinaryData(userID, dataID, binaryData)
 	case "bankcard":
-		err = s.db.UpdateBankCard(userID, dataID, data)
+		bankCard, cerr := utils.CreateBankCard(userID, data)
+		if cerr != nil {
+			http.Error(w, cerr.Error(), http.StatusBadRequest)
+			return
+		}
+		err = s.db.UpdateBankCard(userID, dataID, bankCard)
 	default:
 		log.Println("invalid data type: ", dataType)
 		http.Error(w, "Invalid data type", http.StatusBadRequest)

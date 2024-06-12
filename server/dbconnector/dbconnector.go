@@ -144,10 +144,23 @@ func (dbconn DBConnector) StoreBankCard(bankCard models.BankCard) error {
 }
 
 func (dbconn DBConnector) SaveAndUpdateTextData(datas []models.TextData) error {
+	// Начинаем транзакцию
+	tx, err := dbconn.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	// Если произошла ошибка, откатываем транзакцию
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
 	for _, data := range datas {
 		// Проверка наличия данных в БД
 		var localData models.TextData
-		err := dbconn.db.QueryRow("SELECT * FROM text_data WHERE id = ? AND user_id = ?", data.ID, data.UserID).Scan(
+		err := tx.QueryRow("SELECT * FROM text_data WHERE id = ? AND user_id = ?", data.ID, data.UserID).Scan(
 			&localData.ID, &localData.UserID, &localData.Data, &localData.Meta, &localData.CreatedAt, &localData.UpdatedAt)
 		if err != nil && err != sql.ErrNoRows {
 			return err
@@ -155,14 +168,14 @@ func (dbconn DBConnector) SaveAndUpdateTextData(datas []models.TextData) error {
 
 		// Если данные существуют и локальные данные старее, обновляем их
 		if err == nil && localData.UpdatedAt.Before(data.UpdatedAt) {
-			_, err := dbconn.db.Exec("UPDATE text_data SET data = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+			_, err := tx.Exec("UPDATE text_data SET data = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?",
 				data.Data, data.Meta, data.UpdatedAt, data.ID, data.UserID)
 			if err != nil {
 				return err
 			}
 		} else if err == sql.ErrNoRows {
 			// Если данных нет, вставляем новые данные
-			_, err := dbconn.db.Exec("INSERT INTO text_data (user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+			_, err := tx.Exec("INSERT INTO text_data (user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
 				data.UserID, data.Data, data.Meta, data.CreatedAt, data.UpdatedAt)
 			if err != nil {
 				return err
@@ -170,29 +183,41 @@ func (dbconn DBConnector) SaveAndUpdateTextData(datas []models.TextData) error {
 		}
 	}
 
-	return nil
+	// Если все операции успешно, коммитим транзакцию
+	err = tx.Commit()
+	return err
 }
 
 func (dbconn DBConnector) SaveAndUpdateBinaryData(datas []models.BinaryData) error {
+	tx, err := dbconn.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
 	for _, data := range datas {
-		// Проверка наличия данных в локальной БД
 		var localData models.BinaryData
-		err := dbconn.db.QueryRow("SELECT * FROM binary_data WHERE id = ? AND user_id = ?", data.ID, data.UserID).Scan(
+		err := tx.QueryRow("SELECT * FROM binary_data WHERE id = ? AND user_id = ?", data.ID, data.UserID).Scan(
 			&localData.ID, &localData.UserID, &localData.Data, &localData.Meta, &localData.CreatedAt, &localData.UpdatedAt)
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
 
-		// Если данные существуют и локальные данные старее, обновляем их
 		if err == nil && localData.UpdatedAt.Before(data.UpdatedAt) {
-			_, err := dbconn.db.Exec("UPDATE binary_data SET data = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+			_, err := tx.Exec("UPDATE binary_data SET data = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?",
 				data.Data, data.Meta, data.UpdatedAt, data.ID, data.UserID)
 			if err != nil {
 				return err
 			}
 		} else if err == sql.ErrNoRows {
-			// Если данных нет, вставляем новые данные
-			_, err := dbconn.db.Exec("INSERT INTO binary_data (user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+			_, err := tx.Exec("INSERT INTO binary_data (user_id, data, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
 				data.UserID, data.Data, data.Meta, data.CreatedAt, data.UpdatedAt)
 			if err != nil {
 				return err
@@ -204,25 +229,35 @@ func (dbconn DBConnector) SaveAndUpdateBinaryData(datas []models.BinaryData) err
 }
 
 func (dbconn DBConnector) SaveAndUpdateBankData(datas []models.BankCard) error {
+	tx, err := dbconn.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
 	for _, data := range datas {
-		// Проверка наличия данных в локальной БД
 		var localData models.BankCard
-		err := dbconn.db.QueryRow("SELECT * FROM bank_cards WHERE id = ? AND user_id = ?", data.ID, data.UserID).Scan(
+		err := tx.QueryRow("SELECT * FROM bank_cards WHERE id = ? AND user_id = ?", data.ID, data.UserID).Scan(
 			&localData.ID, &localData.UserID, &localData.Number, &localData.Expiry, &localData.CVV, &localData.Meta, &localData.CreatedAt, &localData.UpdatedAt)
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
 
-		// Если данные существуют и локальные данные старее, обновляем их
 		if err == nil && localData.UpdatedAt.Before(data.UpdatedAt) {
-			_, err := dbconn.db.Exec("UPDATE bank_cards SET number = ?, expiry = ?, cvv = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+			_, err := tx.Exec("UPDATE bank_cards SET number = ?, expiry = ?, cvv = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?",
 				data.Number, data.Expiry, data.CVV, data.Meta, data.UpdatedAt, data.ID, data.UserID)
 			if err != nil {
 				return err
 			}
 		} else if err == sql.ErrNoRows {
-			// Если данных нет, вставляем новые данные
-			_, err := dbconn.db.Exec("INSERT INTO bank_cards (user_id, number, expiry, cvv, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			_, err := tx.Exec("INSERT INTO bank_cards (user_id, number, expiry, cvv, meta, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 				data.UserID, data.Number, data.Expiry, data.CVV, data.Meta, data.CreatedAt, data.UpdatedAt)
 			if err != nil {
 				return err
@@ -426,74 +461,38 @@ func (dbconn DBConnector) DeleteBankCard(userID int, dataID string) error {
 }
 
 // updateTextData updates text data for the given user.
-func (dbconn DBConnector) UpdateTextData(userID int, dataID string, data map[string]interface{}) error {
-	// Check if the data exists.
-	var exists bool
-	err := dbconn.db.QueryRow("SELECT EXISTS(SELECT 1 FROM text_data WHERE id = ? AND user_id = ?)", dataID, userID).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return errors.New("data not found")
-	}
-
-	textData := models.TextData{
-		UserID:    userID,
-		Data:      data["data"].(string),
-		Meta:      data["meta"].(string),
-		UpdatedAt: time.Now(),
-	}
+func (dbconn DBConnector) UpdateTextData(userID int, dataID string, textData models.TextData) error {
 	log.Println("update text", textData)
 
-	_, err = dbconn.db.Exec("UPDATE text_data SET data = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?", textData.Data, textData.Meta, textData.UpdatedAt, dataID, userID)
+	_, err := dbconn.db.Exec(`
+		UPDATE OR IGNORE text_data
+		SET data = ?, meta = ?, updated_at = ? 
+		WHERE id = ? AND user_id = ?
+	`, textData.Data, textData.Meta, textData.UpdatedAt, dataID, userID)
 	return err
 }
 
 // updateBinaryData updates binary data for the given user.
-func (dbconn DBConnector) UpdateBinaryData(userID int, dataID string, data map[string]interface{}) error {
-	// Check if the data exists.
-	var exists bool
-	err := dbconn.db.QueryRow("SELECT EXISTS(SELECT 1 FROM binary_data WHERE id = ? AND user_id = ?)", dataID, userID).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return errors.New("data not found")
-	}
+func (dbconn DBConnector) UpdateBinaryData(userID int, dataID string, binaryData models.BinaryData) error {
+	log.Println("UpdateBinaryData", binaryData)
 
-	binaryData := models.BinaryData{
-		UserID:    userID,
-		Data:      []byte(data["data"].(string)),
-		Meta:      data["meta"].(string),
-		UpdatedAt: time.Now(),
-	}
-
-	_, err = dbconn.db.Exec("UPDATE binary_data SET data = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?", binaryData.Data, binaryData.Meta, binaryData.UpdatedAt, dataID, userID)
+	_, err := dbconn.db.Exec(`
+		UPDATE OR IGNORE binary_data
+		SET data = ?, meta = ?, updated_at = ? 
+		WHERE id = ? AND user_id = ?
+	`, binaryData.Data, binaryData.Meta, binaryData.UpdatedAt, dataID, userID)
 	return err
 }
 
 // updateBankCard updates bank card data for the given user.
-func (dbconn DBConnector) UpdateBankCard(userID int, dataID string, data map[string]interface{}) error {
-	// Check if the data exists.
-	var exists bool
-	err := dbconn.db.QueryRow("SELECT EXISTS(SELECT 1 FROM bank_cards WHERE id = ? AND user_id = ?)", dataID, userID).Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return errors.New("data not found")
-	}
+func (dbconn DBConnector) UpdateBankCard(userID int, dataID string, bankCard models.BankCard) error {
+	log.Println("UpdateBankCard", bankCard)
 
-	bankCard := models.BankCard{
-		UserID:    userID,
-		Number:    data["number"].(string),
-		Expiry:    data["expiry"].(string),
-		CVV:       data["cvv"].(string),
-		Meta:      data["meta"].(string),
-		UpdatedAt: time.Now(),
-	}
-
-	_, err = dbconn.db.Exec("UPDATE bank_cards SET number = ?, expiry = ?, cvv = ?, meta = ?, updated_at = ? WHERE id = ? AND user_id = ?", bankCard.Number, bankCard.Expiry, bankCard.CVV, bankCard.Meta, bankCard.UpdatedAt, dataID, userID)
+	_, err := dbconn.db.Exec(`
+		UPDATE OR IGNORE bank_cards
+		SET number = ?, expiry = ?, cvv = ?, meta = ?, updated_at = ? 
+		WHERE id = ? AND user_id = ?
+	`, bankCard.Number, bankCard.Expiry, bankCard.CVV, bankCard.Meta, bankCard.UpdatedAt, dataID, userID)
 	return err
 }
 
